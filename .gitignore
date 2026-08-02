@@ -1,0 +1,8 @@
+.esphome/
+secrets.yaml
+*.log
+*.tmp
+*.patch
+*.diff
+backup/
+

@@ -1,0 +1,7 @@
+{
+  "esphome.validator": "local",
+  "files.associations": {
+    "sweet-power-display.yaml": "esphome"
+  }
+}
+

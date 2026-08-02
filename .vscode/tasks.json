@@ -1,0 +1,81 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ESPHome: Validate",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "config", "sweet-power-display.yaml"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "shared", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Compile",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "compile", "sweet-power-display.yaml"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "panel": "shared", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Run USB",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "run", "sweet-power-display.yaml", "--device", "COM4"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Upload USB",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "upload", "sweet-power-display.yaml", "--device", "COM4"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Upload OTA",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "upload", "sweet-power-display.yaml", "--device", "sweet-power-display.local"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Logs USB",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "logs", "sweet-power-display.yaml", "--device", "COM4"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": false, "reveal": "always", "focus": true },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Logs OTA",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "logs", "sweet-power-display.yaml", "--device", "sweet-power-display.local"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "dedicated", "clear": false, "reveal": "always", "focus": true },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "ESPHome: Clean",
+      "type": "shell",
+      "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
+      "args": ["-m", "esphome", "clean", "sweet-power-display.yaml"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "panel": "shared", "clear": true, "reveal": "always" },
+      "problemMatcher": []
+    }
+  ]
+}
+
