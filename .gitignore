@@ -4,5 +4,6 @@ secrets.yaml
 *.tmp
 *.patch
 *.diff
+__pycache__/
+*.pyc
 backup/
-

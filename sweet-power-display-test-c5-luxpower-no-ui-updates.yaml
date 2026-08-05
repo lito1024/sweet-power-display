@@ -1,0 +1,90 @@
+external_components:
+  - source:
+      type: git
+      url: https://github.com/lito1024/ESP-LUXPOWER
+      ref: v0.2.0
+    components:
+      - luxpower_tcp
+
+esphome:
+  name: sweet-power-c5-lux
+  friendly_name: "Sweet POWER C5 LuxPower Static"
+  min_version: 2026.6.5
+  libraries:
+    - LuxPowerTCP=https://github.com/lito1024/ESP-LUXPOWER.git#v0.2.0
+
+packages:
+  full_screen_test_pattern: !include packages/full_screen_test_pattern.yaml
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: USB_SERIAL_JTAG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+  frequency: 400kHz
+
+ch422g:
+  - id: io_expander
+
+luxpower_tcp:
+  id: luxpower
+  host: !secret luxpower_host
+  port: !secret luxpower_port
+  dongle_serial: !secret luxpower_dongle_serial
+  inverter_serial: !secret luxpower_inverter_serial
+  input_poll_interval: 1s
+  holding_poll_interval: 30s
+
+display:
+  - platform: mipi_rgb
+    model: ESP32-S3-TOUCH-LCD-7-800X480
+    id: main_display
+    auto_clear_enabled: false
+    update_interval: never
+
+sensor:
+  - platform: luxpower_tcp
+    luxpower_id: luxpower
+    pv1_power:
+      name: "C5 PV1 Power"
+    pv2_power:
+      name: "C5 PV2 Power"
+    battery_soc:
+      name: "C5 Battery SOC"
+    battery_charge_power:
+      name: "C5 Battery Charge Power"
+    battery_discharge_power:
+      name: "C5 Battery Discharge Power"
+    pv1_energy_total:
+      name: "C5 PV1 Energy Total"
+
+binary_sensor:
+  - platform: luxpower_tcp
+    luxpower_id: luxpower
+    feed_in_grid_enabled:
+      name: "C5 Feed-In Grid Enabled"
+    tcp_connected:
+      name: "C5 LuxPower TCP Connected"

@@ -1,0 +1,42 @@
+esphome:
+  name: sweet-power-c2-wifi
+  friendly_name: "Sweet POWER C2 Wi-Fi Only"
+  min_version: 2026.6.5
+
+packages:
+  full_screen_test_pattern: !include packages/full_screen_test_pattern.yaml
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  hardware_uart: USB_SERIAL_JTAG
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+  frequency: 400kHz
+
+ch422g:
+  - id: io_expander
+
+display:
+  - platform: mipi_rgb
+    model: ESP32-S3-TOUCH-LCD-7-800X480
+    id: main_display
+    auto_clear_enabled: false
+    update_interval: never

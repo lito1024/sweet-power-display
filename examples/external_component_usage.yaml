@@ -1,0 +1,80 @@
+# Minimal example: consuming display_protocol_uart from another ESPHome
+# project via a pinned public GitHub tag. No symlink://, no local
+# filesystem paths, no C:\Projects references -- everything resolves from
+# github.com/lito1024/sweet-power-display and github.com/lito1024/ESP-TELEMETRY
+# at tag v1.0.0.
+#
+# This file intentionally only proves the display_protocol_uart component
+# itself compiles standalone (UART receiver + sensors) -- it does not
+# include the LVGL/display stack, which is a separate concern from the
+# receiver component.
+
+esphome:
+  name: external-component-usage-example
+  # ESP-TELEMETRY is a plain PlatformIO/Arduino library dependency, not an
+  # ESPHome external component -- it must be declared here explicitly by
+  # any consuming project. display_protocol_uart's own codegen
+  # (components/display_protocol_uart/__init__.py) does not auto-declare
+  # it, by design: that keeps this repository's own local development
+  # builds free to use a fast symlink:// dependency without any risk of
+  # conflicting with a consumer's pinned git URL (PlatformIO's library
+  # reconciliation rejects two different repository values for the same
+  # library name).
+  libraries:
+    - ESP-TELEMETRY=https://github.com/lito1024/ESP-TELEMETRY.git#v1.0.0
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/lito1024/sweet-power-display
+      ref: v1.0.0
+    components:
+      - display_protocol_uart
+    refresh: 0s
+
+uart:
+  id: gateway_uart
+  rx_pin: GPIO44
+  tx_pin: GPIO43
+  baud_rate: 230400
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+display_protocol_uart:
+  id: gateway_receiver
+  uart_id: gateway_uart
+  stale_timeout: 5s
+
+# A handful of representative entities -- see the parent project's
+# ENTITY_MODEL.md for the full 92-entity x 2-device list. Every catalog
+# key is available prefixed inverter1_<key> / inverter2_<key>; a few
+# whole-link diagnostics (uart_valid_frames, uart_crc_errors, etc.) are
+# not device-prefixed.
+sensor:
+  - platform: display_protocol_uart
+    display_protocol_uart_id: gateway_receiver
+    inverter1_pv1_power:
+      name: "Inverter 1 PV1 Power"
+    inverter1_battery_soc:
+      name: "Inverter 1 Battery SOC"
+    inverter2_pv1_power:
+      name: "Inverter 2 PV1 Power"
+    inverter2_battery_soc:
+      name: "Inverter 2 Battery SOC"
+    uart_valid_frames:
+      name: "UART Valid Frames"
+
+binary_sensor:
+  - platform: display_protocol_uart
+    display_protocol_uart_id: gateway_receiver
+    inverter1_gateway_data_fresh:
+      name: "Inverter 1 Data Fresh"
+    inverter2_gateway_data_fresh:
+      name: "Inverter 2 Data Fresh"

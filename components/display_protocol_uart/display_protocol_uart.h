@@ -1,0 +1,307 @@
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/sensor/sensor.h"
+#include "esphome/components/uart/uart.h"
+#include "esphome/core/component.h"
+
+#include "ESPTelemetry.h"
+#include "display_protocol_entity_metadata.generated.h"
+
+namespace esphome {
+namespace display_protocol_uart {
+
+class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
+ public:
+  // Stage 32: exactly two telemetry sources (device_id 1 = inverter 1,
+  // device_id 2 = inverter 2), indexed 0/1 in every per-device array below.
+  // device_id 0 (aggregate) is reserved for a future stage and is not
+  // published to any entity yet.
+  static constexpr uint8_t kDeviceCount = 2;
+
+  void setup() override;
+  void loop() override;
+  void dump_config() override;
+
+  void set_stale_timeout(uint32_t timeout_ms) { this->stale_timeout_ms_ = timeout_ms; }
+  void set_trace_frames(bool trace_frames) { this->trace_frames_ = trace_frames; }
+  void set_rx_gpio(uint8_t gpio) { this->rx_gpio_ = gpio; }
+  void set_tx_gpio(uint8_t gpio) { this->tx_gpio_ = gpio; }
+
+  void set_pv1_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv1_power_sensor_[device_index] = sensor; }
+  void set_pv2_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv2_power_sensor_[device_index] = sensor; }
+  void set_battery_soc_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_soc_sensor_[device_index] = sensor; }
+  void set_battery_charge_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_charge_power_sensor_[device_index] = sensor; }
+  void set_battery_discharge_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_discharge_power_sensor_[device_index] = sensor; }
+  void set_pv1_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv1_energy_total_sensor_[device_index] = sensor; }
+  void set_gateway_snapshot_age_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->gateway_snapshot_age_sensor_[device_index] = sensor; }
+  void set_gateway_sequence_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->gateway_sequence_sensor_[device_index] = sensor; }
+  void set_uart_valid_frames_sensor(sensor::Sensor *sensor) { this->uart_valid_frames_sensor_ = sensor; }
+  void set_uart_crc_errors_sensor(sensor::Sensor *sensor) { this->uart_crc_errors_sensor_ = sensor; }
+  void set_uart_decode_errors_sensor(sensor::Sensor *sensor) { this->uart_decode_errors_sensor_ = sensor; }
+  void set_uart_sequence_gaps_sensor(sensor::Sensor *sensor) { this->uart_sequence_gaps_sensor_ = sensor; }
+  void set_uart_duplicate_frames_sensor(sensor::Sensor *sensor) { this->uart_duplicate_frames_sensor_ = sensor; }
+
+  void set_battery_capacity_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_capacity_sensor_[device_index] = sensor; }
+  void set_bms_max_cell_temperature_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_max_cell_temperature_sensor_[device_index] = sensor; }
+  void set_power_to_grid_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->power_to_grid_sensor_[device_index] = sensor; }
+  void set_power_from_grid_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->power_from_grid_sensor_[device_index] = sensor; }
+  void set_grid_flow_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_flow_sensor_[device_index] = sensor; }
+
+  // Stage 30: 79 additional production entities, sourced from the
+  // upstream luxpower-ha-integration register map (see
+  // FULL_ENTITY_COVERAGE.md), all inside the Gateway's already-polled
+  // input 0..124 block. Same raw-passthrough wire convention as the five
+  // entities above.
+  void set_pv1_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv1_voltage_sensor_[device_index] = sensor; }
+  void set_pv2_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv2_voltage_sensor_[device_index] = sensor; }
+  void set_pv3_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv3_voltage_sensor_[device_index] = sensor; }
+  void set_pv3_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv3_power_sensor_[device_index] = sensor; }
+  void set_pv1_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv1_energy_today_sensor_[device_index] = sensor; }
+  void set_pv2_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv2_energy_today_sensor_[device_index] = sensor; }
+  void set_pv3_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv3_energy_today_sensor_[device_index] = sensor; }
+  void set_pv2_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv2_energy_total_sensor_[device_index] = sensor; }
+  void set_pv3_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv3_energy_total_sensor_[device_index] = sensor; }
+  void set_battery_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_voltage_sensor_[device_index] = sensor; }
+  void set_battery_soh_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_soh_sensor_[device_index] = sensor; }
+  void set_battery_temperature_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_temperature_sensor_[device_index] = sensor; }
+  void set_battery_parallel_number_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_parallel_number_sensor_[device_index] = sensor; }
+  void set_battery_type_and_brand_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_type_and_brand_sensor_[device_index] = sensor; }
+  void set_bms_max_charge_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_max_charge_current_sensor_[device_index] = sensor; }
+  void set_bms_max_discharge_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_max_discharge_current_sensor_[device_index] = sensor; }
+  void set_bms_charge_voltage_reference_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_charge_voltage_reference_sensor_[device_index] = sensor; }
+  void set_bms_discharge_cutoff_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_discharge_cutoff_voltage_sensor_[device_index] = sensor; }
+  void set_bms_battery_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_battery_current_sensor_[device_index] = sensor; }
+  void set_bms_fault_code_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_fault_code_sensor_[device_index] = sensor; }
+  void set_bms_warning_code_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_warning_code_sensor_[device_index] = sensor; }
+  void set_bms_max_cell_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_max_cell_voltage_sensor_[device_index] = sensor; }
+  void set_bms_min_cell_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_min_cell_voltage_sensor_[device_index] = sensor; }
+  void set_bms_min_cell_temperature_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_min_cell_temperature_sensor_[device_index] = sensor; }
+  void set_bms_firmware_update_state_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_firmware_update_state_sensor_[device_index] = sensor; }
+  void set_bms_cycle_count_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_cycle_count_sensor_[device_index] = sensor; }
+  void set_inverter_battery_voltage_sample_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_battery_voltage_sample_sensor_[device_index] = sensor; }
+  void set_charge_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->charge_energy_today_sensor_[device_index] = sensor; }
+  void set_discharge_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->discharge_energy_today_sensor_[device_index] = sensor; }
+  void set_charge_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->charge_energy_total_sensor_[device_index] = sensor; }
+  void set_discharge_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->discharge_energy_total_sensor_[device_index] = sensor; }
+  void set_grid_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_voltage_sensor_[device_index] = sensor; }
+  void set_grid_voltage_s_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_voltage_s_sensor_[device_index] = sensor; }
+  void set_grid_voltage_t_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_voltage_t_sensor_[device_index] = sensor; }
+  void set_grid_frequency_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_frequency_sensor_[device_index] = sensor; }
+  void set_inverter_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_power_sensor_[device_index] = sensor; }
+  void set_ac_charging_rectification_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->ac_charging_rectification_power_sensor_[device_index] = sensor; }
+  void set_inverter_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_current_sensor_[device_index] = sensor; }
+  void set_power_factor_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->power_factor_sensor_[device_index] = sensor; }
+  void set_energy_to_grid_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->energy_to_grid_today_sensor_[device_index] = sensor; }
+  void set_energy_from_grid_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->energy_from_grid_today_sensor_[device_index] = sensor; }
+  void set_energy_to_grid_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->energy_to_grid_total_sensor_[device_index] = sensor; }
+  void set_energy_from_grid_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->energy_from_grid_total_sensor_[device_index] = sensor; }
+  void set_ongrid_load_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->ongrid_load_power_sensor_[device_index] = sensor; }
+  void set_bus1_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bus1_voltage_sensor_[device_index] = sensor; }
+  void set_bus2_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bus2_voltage_sensor_[device_index] = sensor; }
+  void set_half_bus_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->half_bus_voltage_sensor_[device_index] = sensor; }
+  void set_eps_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_voltage_sensor_[device_index] = sensor; }
+  void set_eps_voltage_s_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_voltage_s_sensor_[device_index] = sensor; }
+  void set_eps_voltage_t_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_voltage_t_sensor_[device_index] = sensor; }
+  void set_eps_frequency_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_frequency_sensor_[device_index] = sensor; }
+  void set_eps_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_power_sensor_[device_index] = sensor; }
+  void set_eps_apparent_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_apparent_power_sensor_[device_index] = sensor; }
+  void set_eps_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_energy_today_sensor_[device_index] = sensor; }
+  void set_eps_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->eps_energy_total_sensor_[device_index] = sensor; }
+  void set_internal_temperature_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->internal_temperature_sensor_[device_index] = sensor; }
+  void set_radiator_temperature_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->radiator_temperature_sensor_[device_index] = sensor; }
+  void set_radiator_temperature_2_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->radiator_temperature_2_sensor_[device_index] = sensor; }
+  void set_inverter_state_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_state_sensor_[device_index] = sensor; }
+  void set_internal_fault_code_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->internal_fault_code_sensor_[device_index] = sensor; }
+  void set_ac_input_type_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->ac_input_type_sensor_[device_index] = sensor; }
+  void set_auto_test_status_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->auto_test_status_sensor_[device_index] = sensor; }
+  void set_inverter_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_energy_today_sensor_[device_index] = sensor; }
+  void set_ac_charge_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->ac_charge_energy_today_sensor_[device_index] = sensor; }
+  void set_inverter_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->inverter_energy_total_sensor_[device_index] = sensor; }
+  void set_ac_charge_energy_total_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->ac_charge_energy_total_sensor_[device_index] = sensor; }
+  void set_total_running_time_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->total_running_time_sensor_[device_index] = sensor; }
+  void set_generator_voltage_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->generator_voltage_sensor_[device_index] = sensor; }
+  void set_generator_frequency_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->generator_frequency_sensor_[device_index] = sensor; }
+  void set_generator_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->generator_power_sensor_[device_index] = sensor; }
+  void set_generator_energy_today_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->generator_energy_today_sensor_[device_index] = sensor; }
+  void set_pv1_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv1_current_sensor_[device_index] = sensor; }
+  void set_pv2_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv2_current_sensor_[device_index] = sensor; }
+  void set_pv3_current_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->pv3_current_sensor_[device_index] = sensor; }
+  void set_battery_flow_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_flow_sensor_[device_index] = sensor; }
+  void set_bms_cell_difference_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->bms_cell_difference_sensor_[device_index] = sensor; }
+  void set_grid_connected_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_connected_sensor_[device_index] = sensor; }
+  void set_active_fault_code_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->active_fault_code_sensor_[device_index] = sensor; }
+  void set_active_warning_code_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->active_warning_code_sensor_[device_index] = sensor; }
+  // Stage 31: load_power (FieldId 9085), FAST class, via the new input block 2.
+  void set_load_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->load_power_sensor_[device_index] = sensor; }
+
+  void set_gateway_data_fresh_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->gateway_data_fresh_sensor_[device_index] = sensor; }
+  void set_gateway_link_connected_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->gateway_link_connected_sensor_[device_index] = sensor; }
+  void set_luxpower_tcp_connected_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->luxpower_tcp_connected_sensor_[device_index] = sensor; }
+  void set_input_cache_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->input_cache_valid_sensor_[device_index] = sensor; }
+  void set_holding_cache_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->holding_cache_valid_sensor_[device_index] = sensor; }
+  void set_snapshot_values_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->snapshot_values_valid_sensor_[device_index] = sensor; }
+  void set_feed_in_grid_enabled_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->feed_in_grid_enabled_sensor_[device_index] = sensor; }
+
+  bool send_raw_frame(const uint8_t *data, size_t length);
+
+ protected:
+  // Returns 0/1 for device_id 1/2, or -1 for any other device_id (unknown
+  // sender or the reserved aggregate id 0 -- not published in Stage 32).
+  static int8_t device_index_for_id_(uint8_t device_id);
+
+  void handle_decode_result_(ESPTelemetry::DecodeResult result, const ESPTelemetry::Frame &frame, uint32_t now);
+  void handle_snapshot_frame_(const ESPTelemetry::Frame &frame, uint32_t now);
+  void handle_telemetry_frame_(const ESPTelemetry::Frame &frame, uint32_t now);
+  void publish_snapshot_(uint8_t device_index, uint32_t now);
+  void publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now);
+  void publish_diagnostics_(uint32_t now);
+  void update_stale_state_(uint32_t now);
+  void publish_binary_(binary_sensor::BinarySensor *sensor, bool value);
+  void publish_float_(sensor::Sensor *sensor, float value);
+  void trace_frame_(const ESPTelemetry::Frame &frame);
+
+  ESPTelemetry::Decoder decoder_;
+  // Stage 32: every per-source field below is indexed [0]=inverter1(device_id
+  // 1), [1]=inverter2(device_id 2) -- independent values, freshness, and
+  // link state per device, so one Gateway can never overwrite or mask the
+  // other's entities (see stages/Stage32.md).
+  ESPTelemetry::SnapshotPayload latest_[kDeviceCount]{};
+  bool have_snapshot_[kDeviceCount] = {false, false};
+  bool data_fresh_[kDeviceCount] = {false, false};
+  bool link_connected_[kDeviceCount] = {false, false};
+  bool have_last_sequence_[kDeviceCount] = {false, false};
+  uint16_t last_sequence_[kDeviceCount] = {0, 0};
+  uint32_t last_frame_ms_[kDeviceCount] = {0, 0};
+  uint32_t last_publish_ms_ = 0;
+  uint32_t stale_timeout_ms_ = 5000;
+  bool trace_frames_ = false;
+  uint8_t rx_gpio_ = 44;
+  uint8_t tx_gpio_ = 43;
+
+  // Whole-UART-link transport diagnostics (Stage 32: kept global, not
+  // per-device -- CRC errors and malformed frames occur before a device_id
+  // can even be parsed, and both Gateways share this one physical wire via
+  // the Bridge, so these counters describe the link itself, not a source).
+
+  uint32_t valid_frames_ = 0;
+  uint32_t crc_errors_ = 0;
+  uint32_t decode_errors_ = 0;
+  uint32_t sequence_gaps_ = 0;
+  uint32_t duplicate_frames_ = 0;
+
+  sensor::Sensor *pv1_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv2_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_soc_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_charge_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_discharge_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv1_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *gateway_snapshot_age_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *gateway_sequence_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *uart_valid_frames_sensor_ = nullptr;
+  sensor::Sensor *uart_crc_errors_sensor_ = nullptr;
+  sensor::Sensor *uart_decode_errors_sensor_ = nullptr;
+  sensor::Sensor *uart_sequence_gaps_sensor_ = nullptr;
+  sensor::Sensor *uart_duplicate_frames_sensor_ = nullptr;
+
+  sensor::Sensor *battery_capacity_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_max_cell_temperature_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *power_to_grid_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *power_from_grid_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_flow_sensor_[kDeviceCount] = {nullptr, nullptr};
+
+  sensor::Sensor *pv1_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv2_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv3_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv3_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv1_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv2_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv3_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv2_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv3_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_soh_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_temperature_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_parallel_number_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_type_and_brand_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_max_charge_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_max_discharge_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_charge_voltage_reference_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_discharge_cutoff_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_battery_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_fault_code_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_warning_code_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_max_cell_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_min_cell_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_min_cell_temperature_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_firmware_update_state_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_cycle_count_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_battery_voltage_sample_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *charge_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *discharge_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *charge_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *discharge_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_voltage_s_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_voltage_t_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_frequency_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *ac_charging_rectification_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *power_factor_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *energy_to_grid_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *energy_from_grid_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *energy_to_grid_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *energy_from_grid_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *ongrid_load_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bus1_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bus2_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *half_bus_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_voltage_s_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_voltage_t_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_frequency_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_apparent_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *eps_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *internal_temperature_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *radiator_temperature_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *radiator_temperature_2_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_state_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *internal_fault_code_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *ac_input_type_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *auto_test_status_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *ac_charge_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *inverter_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *ac_charge_energy_total_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *total_running_time_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *generator_voltage_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *generator_frequency_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *generator_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *generator_energy_today_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv1_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv2_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *pv3_current_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_flow_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *bms_cell_difference_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_connected_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *active_fault_code_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *active_warning_code_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *load_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+
+  binary_sensor::BinarySensor *gateway_data_fresh_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *gateway_link_connected_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *luxpower_tcp_connected_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *input_cache_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *holding_cache_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *snapshot_values_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *feed_in_grid_enabled_sensor_[kDeviceCount] = {nullptr, nullptr};
+};
+
+}  // namespace display_protocol_uart
+}  // namespace esphome

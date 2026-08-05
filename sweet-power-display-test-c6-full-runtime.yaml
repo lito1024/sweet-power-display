@@ -2,13 +2,13 @@ external_components:
   - source:
       type: git
       url: https://github.com/lito1024/ESP-LUXPOWER
-      ref: v1.0.0
+      ref: v0.2.0
     components:
       - luxpower_tcp
 
 esphome:
-  name: sweet-power-display
-  friendly_name: "Sweet POWER Display"
+  name: sweet-power-c6-full
+  friendly_name: "Sweet POWER C6 Full Runtime"
   min_version: 2026.6.5
   includes:
     - diagnostics_heap.h

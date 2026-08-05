@@ -24,7 +24,7 @@
       "label": "ESPHome: Run USB",
       "type": "shell",
       "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
-      "args": ["-m", "esphome", "run", "sweet-power-display.yaml", "--device", "COM4"],
+      "args": ["-m", "esphome", "run", "sweet-power-display.yaml", "--device", "COM6"],
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "panel": "dedicated", "clear": true, "reveal": "always" },
       "problemMatcher": []
@@ -33,7 +33,7 @@
       "label": "ESPHome: Upload USB",
       "type": "shell",
       "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
-      "args": ["-m", "esphome", "upload", "sweet-power-display.yaml", "--device", "COM4"],
+      "args": ["-m", "esphome", "upload", "sweet-power-display.yaml", "--device", "COM6"],
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "panel": "dedicated", "clear": true, "reveal": "always" },
       "problemMatcher": []
@@ -51,7 +51,7 @@
       "label": "ESPHome: Logs USB",
       "type": "shell",
       "command": "C:\\Projects\\ESP\\esphome-venv\\Scripts\\python.exe",
-      "args": ["-m", "esphome", "logs", "sweet-power-display.yaml", "--device", "COM4"],
+      "args": ["-m", "esphome", "logs", "sweet-power-display.yaml", "--device", "COM6"],
       "options": { "cwd": "${workspaceFolder}" },
       "presentation": { "panel": "dedicated", "clear": false, "reveal": "always", "focus": true },
       "isBackground": true,

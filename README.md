@@ -1,5 +1,10 @@
 # Sweet Power Display
 
+**Sweet POWER v1.0.0** ("Sweet POWER 1.0") -- architecture frozen. This
+repository also publishes the `display_protocol_uart` and
+`display_protocol_espnow` ESPHome external components used by the rest of
+the Sweet Power project.
+
 ESPHome firmware for the Waveshare ESP32-S3-Touch-LCD-7 Sweet POWER dashboard.
 
 This project was generated from `C:\Projects\ESP\ESP-DEV-TOOLKIT` and then
@@ -66,3 +71,33 @@ C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome upload sweet-power-di
 ```
 
 No inverter writes are configured.
+
+## Using `display_protocol_uart` In Another ESPHome Project
+
+The UART telemetry receiver component is installable from this repository
+via a pinned GitHub tag, with no `symlink://` or local filesystem paths:
+
+```yaml
+esphome:
+  # ESP-TELEMETRY is a plain library dependency, not an ESPHome external
+  # component -- declare it explicitly (display_protocol_uart does not
+  # auto-declare it, so this repo's own local dev builds can keep using a
+  # fast symlink:// dependency without conflicting with your pinned tag).
+  libraries:
+    - ESP-TELEMETRY=https://github.com/lito1024/ESP-TELEMETRY.git#v1.0.0
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/lito1024/sweet-power-display
+      ref: v1.0.0
+    components:
+      - display_protocol_uart
+    refresh: 0s
+```
+
+See `examples/external_component_usage.yaml` for a complete, minimal,
+compilable configuration (UART + sensors only, no display/LVGL). Every
+production catalog entity is available as `inverter1_<key>` /
+`inverter2_<key>` sensor config keys; see `ENTITY_MODEL.md` in
+`SweetPower-Project-Docs` for the full list.

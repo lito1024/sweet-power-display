@@ -1,0 +1,1210 @@
+external_components:
+  - source:
+      type: local
+      path: components
+    components:
+      - display_protocol_uart
+
+esphome:
+  name: sweet-power-uart-test
+  friendly_name: "Sweet POWER UART Test"
+  min_version: 2026.6.5
+  libraries:
+    - ESP-TELEMETRY=symlink://C:/Projects/ESP/ESP-TELEMETRY
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: INFO
+  # Keep ESPHome logs on the native ESP32-S3 USB Serial/JTAG console.
+  # GPIO43/GPIO44 are reserved below for the external Waveshare UART connector,
+  # so UART0 logging would conflict with the receiver path.
+  hardware_uart: USB_SERIAL_JTAG
+
+i2c:
+  sda: GPIO8
+  scl: GPIO9
+  scan: true
+  frequency: 400kHz
+
+ch422g:
+  - id: io_expander
+
+uart:
+  id: gateway_uart
+  # Waveshare Rev1.2 routes the external UART connector through the UART
+  # selection switch to ESP_RXD/ESP_TXD. Use the board USB Type-C native
+  # USB/JTAG port for logs, not the USB-to-UART Type-C port.
+  rx_pin: GPIO44
+  tx_pin: GPIO43
+  baud_rate: 230400
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+display_protocol_uart:
+  id: gateway_receiver
+  uart_id: gateway_uart
+  rx_gpio: 44
+  tx_gpio: 43
+  stale_timeout: 5s
+  trace_frames: false
+
+display:
+  - platform: mipi_rgb
+    model: ESP32-S3-TOUCH-LCD-7-800X480
+    id: main_display
+    auto_clear_enabled: false
+    update_interval: never
+
+lvgl:
+  displays:
+    - main_display
+  buffer_size: 12%
+  default_font: montserrat_16
+  bg_color: 0x000000
+  text_color: 0xFFFFFF
+  pad_all: 0
+  theme:
+    obj:
+      bg_color: 0x000000
+      bg_opa: cover
+      border_width: 0
+      outline_width: 0
+      shadow_width: 0
+      radius: 0
+      pad_all: 0
+    label:
+      bg_opa: transp
+      text_color: 0xFFFFFF
+  # Stage 32 section 8: minimal two-column validation page proving Inverter
+  # 1 and Inverter 2 update simultaneously and independently. Not the final
+  # HMI. Left column = inverter1 (device_id 1), right column = inverter2
+  # (device_id 2). Each column shows the 8 FAST fields, one NORMAL test
+  # field (PV1 Voltage), one SLOW test field (Energy To Grid Total), and a
+  # freshness/age indicator (seconds since that device's last frame).
+  widgets:
+    - obj:
+        width: 100%
+        height: 100%
+        bg_color: 0x000000
+        border_width: 0
+        pad_all: 8
+        scrollable: false
+        layout:
+          type: flex
+          flex_flow: row
+          flex_align_main: space_evenly
+          flex_align_cross: start
+        widgets:
+          - obj:
+              width: 48%
+              height: size_content
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+              widgets:
+                - label: {text: "INVERTER 1", text_font: montserrat_20, text_color: 0xFFFFFF, pad_bottom: 8}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV1 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_pv1_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV2 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_pv2_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Load Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_load_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Power From Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_power_from_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Power To Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_power_to_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery Charge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_battery_charge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery Discharge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_battery_discharge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery SOC :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_battery_soc_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV1 Voltage (NORMAL) :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_pv1_voltage_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Energy To Grid Total (SLOW) :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_energy_to_grid_total_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Freshness :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv1_gateway_snapshot_age_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+          - obj:
+              width: 48%
+              height: size_content
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+              widgets:
+                - label: {text: "INVERTER 2", text_font: montserrat_20, text_color: 0xFFFFFF, pad_bottom: 8}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV1 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_pv1_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV2 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_pv2_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Load Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_load_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Power From Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_power_from_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Power To Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_power_to_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery Charge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_battery_charge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery Discharge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_battery_discharge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Battery SOC :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_battery_soc_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "PV1 Voltage (NORMAL) :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_pv1_voltage_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Energy To Grid Total (SLOW) :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_energy_to_grid_total_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj:
+                    width: 100%
+                    height: size_content
+                    border_width: 0
+                    pad_all: 0
+                    pad_bottom: 6
+                    scrollable: false
+                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
+                    widgets:
+                      - label: {text: "Freshness :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
+                      - label: {id: inv2_gateway_snapshot_age_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+
+sensor:
+  - platform: display_protocol_uart
+    display_protocol_uart_id: gateway_receiver
+    inverter1_pv1_power:
+      name: "Inverter 1 PV1 Power"
+      id: inverter1_pv1_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_pv1_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_pv1_power_label), text);
+                lv_obj_send_event(id(inv1_pv1_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_pv1_power:
+      name: "Inverter 2 PV1 Power"
+      id: inverter2_pv1_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_pv1_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_pv1_power_label), text);
+                lv_obj_send_event(id(inv2_pv1_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_pv2_power:
+      name: "Inverter 1 PV2 Power"
+      id: inverter1_pv2_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_pv2_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_pv2_power_label), text);
+                lv_obj_send_event(id(inv1_pv2_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_pv2_power:
+      name: "Inverter 2 PV2 Power"
+      id: inverter2_pv2_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_pv2_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_pv2_power_label), text);
+                lv_obj_send_event(id(inv2_pv2_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_battery_soc:
+      name: "Inverter 1 Battery SOC"
+      id: inverter1_battery_soc
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f %%", x);
+              const char *current = lv_label_get_text(id(inv1_battery_soc_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_battery_soc_label), text);
+                lv_obj_send_event(id(inv1_battery_soc_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_battery_soc:
+      name: "Inverter 2 Battery SOC"
+      id: inverter2_battery_soc
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f %%", x);
+              const char *current = lv_label_get_text(id(inv2_battery_soc_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_battery_soc_label), text);
+                lv_obj_send_event(id(inv2_battery_soc_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_battery_charge_power:
+      name: "Inverter 1 Battery Charge Power"
+      id: inverter1_battery_charge_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_battery_charge_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_battery_charge_power_label), text);
+                lv_obj_send_event(id(inv1_battery_charge_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_battery_charge_power:
+      name: "Inverter 2 Battery Charge Power"
+      id: inverter2_battery_charge_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_battery_charge_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_battery_charge_power_label), text);
+                lv_obj_send_event(id(inv2_battery_charge_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_battery_discharge_power:
+      name: "Inverter 1 Battery Discharge Power"
+      id: inverter1_battery_discharge_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_battery_discharge_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_battery_discharge_power_label), text);
+                lv_obj_send_event(id(inv1_battery_discharge_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_battery_discharge_power:
+      name: "Inverter 2 Battery Discharge Power"
+      id: inverter2_battery_discharge_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_battery_discharge_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_battery_discharge_power_label), text);
+                lv_obj_send_event(id(inv2_battery_discharge_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_load_power:
+      name: "Inverter 1 Load Power"
+      id: inverter1_load_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_load_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_load_power_label), text);
+                lv_obj_send_event(id(inv1_load_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_load_power:
+      name: "Inverter 2 Load Power"
+      id: inverter2_load_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_load_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_load_power_label), text);
+                lv_obj_send_event(id(inv2_load_power_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_pv1_energy_total:
+      name: "Inverter 1 PV1 Energy Total"
+      id: inverter1_pv1_energy_total
+    inverter2_pv1_energy_total:
+      name: "Inverter 2 PV1 Energy Total"
+      id: inverter2_pv1_energy_total
+    inverter1_gateway_snapshot_age:
+      name: "Inverter 1 Gateway Snapshot Age"
+      id: inverter1_gateway_snapshot_age
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f s age", x / 1000.0);
+              const char *current = lv_label_get_text(id(inv1_gateway_snapshot_age_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_gateway_snapshot_age_label), text);
+                lv_obj_send_event(id(inv1_gateway_snapshot_age_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_gateway_snapshot_age:
+      name: "Inverter 2 Gateway Snapshot Age"
+      id: inverter2_gateway_snapshot_age
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f s age", x / 1000.0);
+              const char *current = lv_label_get_text(id(inv2_gateway_snapshot_age_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_gateway_snapshot_age_label), text);
+                lv_obj_send_event(id(inv2_gateway_snapshot_age_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_gateway_sequence:
+      name: "Inverter 1 Gateway Sequence"
+      id: inverter1_gateway_sequence
+    inverter2_gateway_sequence:
+      name: "Inverter 2 Gateway Sequence"
+      id: inverter2_gateway_sequence
+    uart_valid_frames:
+      name: "UART Valid Frames"
+      id: uart_valid_frames
+    uart_crc_errors:
+      name: "UART CRC Errors"
+      id: uart_crc_errors
+    uart_decode_errors:
+      name: "UART Decode Errors"
+      id: uart_decode_errors
+    uart_sequence_gaps:
+      name: "UART Sequence Gaps"
+      id: uart_sequence_gaps
+    uart_duplicate_frames:
+      name: "UART Duplicate Frames"
+      id: uart_duplicate_frames
+    inverter1_battery_capacity:
+      name: "Inverter 1 Battery Capacity"
+      id: inverter1_battery_capacity
+    inverter2_battery_capacity:
+      name: "Inverter 2 Battery Capacity"
+      id: inverter2_battery_capacity
+    inverter1_bms_max_cell_temperature:
+      name: "Inverter 1 BMS Max Cell Temperature"
+      id: inverter1_bms_max_cell_temperature
+    inverter2_bms_max_cell_temperature:
+      name: "Inverter 2 BMS Max Cell Temperature"
+      id: inverter2_bms_max_cell_temperature
+    inverter1_power_to_grid:
+      name: "Inverter 1 Power To Grid"
+      id: inverter1_power_to_grid
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_power_to_grid_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_power_to_grid_label), text);
+                lv_obj_send_event(id(inv1_power_to_grid_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_power_to_grid:
+      name: "Inverter 2 Power To Grid"
+      id: inverter2_power_to_grid
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_power_to_grid_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_power_to_grid_label), text);
+                lv_obj_send_event(id(inv2_power_to_grid_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_power_from_grid:
+      name: "Inverter 1 Power From Grid"
+      id: inverter1_power_from_grid
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv1_power_from_grid_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_power_from_grid_label), text);
+                lv_obj_send_event(id(inv1_power_from_grid_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_power_from_grid:
+      name: "Inverter 2 Power From Grid"
+      id: inverter2_power_from_grid
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.0f W", x);
+              const char *current = lv_label_get_text(id(inv2_power_from_grid_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_power_from_grid_label), text);
+                lv_obj_send_event(id(inv2_power_from_grid_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_grid_flow:
+      name: "Inverter 1 Grid Flow"
+      id: inverter1_grid_flow
+    inverter2_grid_flow:
+      name: "Inverter 2 Grid Flow"
+      id: inverter2_grid_flow
+    inverter1_pv1_voltage:
+      name: "Inverter 1 PV1 Voltage"
+      id: inverter1_pv1_voltage
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f V", x);
+              const char *current = lv_label_get_text(id(inv1_pv1_voltage_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_pv1_voltage_label), text);
+                lv_obj_send_event(id(inv1_pv1_voltage_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_pv1_voltage:
+      name: "Inverter 2 PV1 Voltage"
+      id: inverter2_pv1_voltage
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f V", x);
+              const char *current = lv_label_get_text(id(inv2_pv1_voltage_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_pv1_voltage_label), text);
+                lv_obj_send_event(id(inv2_pv1_voltage_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_pv2_voltage:
+      name: "Inverter 1 PV2 Voltage"
+      id: inverter1_pv2_voltage
+    inverter2_pv2_voltage:
+      name: "Inverter 2 PV2 Voltage"
+      id: inverter2_pv2_voltage
+    inverter1_pv3_voltage:
+      name: "Inverter 1 PV3 Voltage"
+      id: inverter1_pv3_voltage
+    inverter2_pv3_voltage:
+      name: "Inverter 2 PV3 Voltage"
+      id: inverter2_pv3_voltage
+    inverter1_pv3_power:
+      name: "Inverter 1 PV3 Power"
+      id: inverter1_pv3_power
+    inverter2_pv3_power:
+      name: "Inverter 2 PV3 Power"
+      id: inverter2_pv3_power
+    inverter1_pv1_energy_today:
+      name: "Inverter 1 PV1 Energy Today"
+      id: inverter1_pv1_energy_today
+    inverter2_pv1_energy_today:
+      name: "Inverter 2 PV1 Energy Today"
+      id: inverter2_pv1_energy_today
+    inverter1_pv2_energy_today:
+      name: "Inverter 1 PV2 Energy Today"
+      id: inverter1_pv2_energy_today
+    inverter2_pv2_energy_today:
+      name: "Inverter 2 PV2 Energy Today"
+      id: inverter2_pv2_energy_today
+    inverter1_pv3_energy_today:
+      name: "Inverter 1 PV3 Energy Today"
+      id: inverter1_pv3_energy_today
+    inverter2_pv3_energy_today:
+      name: "Inverter 2 PV3 Energy Today"
+      id: inverter2_pv3_energy_today
+    inverter1_pv2_energy_total:
+      name: "Inverter 1 PV2 Energy Total"
+      id: inverter1_pv2_energy_total
+    inverter2_pv2_energy_total:
+      name: "Inverter 2 PV2 Energy Total"
+      id: inverter2_pv2_energy_total
+    inverter1_pv3_energy_total:
+      name: "Inverter 1 PV3 Energy Total"
+      id: inverter1_pv3_energy_total
+    inverter2_pv3_energy_total:
+      name: "Inverter 2 PV3 Energy Total"
+      id: inverter2_pv3_energy_total
+    inverter1_battery_voltage:
+      name: "Inverter 1 Battery Voltage"
+      id: inverter1_battery_voltage
+    inverter2_battery_voltage:
+      name: "Inverter 2 Battery Voltage"
+      id: inverter2_battery_voltage
+    inverter1_battery_soh:
+      name: "Inverter 1 Battery SOH"
+      id: inverter1_battery_soh
+    inverter2_battery_soh:
+      name: "Inverter 2 Battery SOH"
+      id: inverter2_battery_soh
+    inverter1_battery_temperature:
+      name: "Inverter 1 Battery Temperature"
+      id: inverter1_battery_temperature
+    inverter2_battery_temperature:
+      name: "Inverter 2 Battery Temperature"
+      id: inverter2_battery_temperature
+    inverter1_battery_parallel_number:
+      name: "Inverter 1 Battery Parallel Number"
+      id: inverter1_battery_parallel_number
+    inverter2_battery_parallel_number:
+      name: "Inverter 2 Battery Parallel Number"
+      id: inverter2_battery_parallel_number
+    inverter1_battery_type_and_brand:
+      name: "Inverter 1 Battery Type And Brand"
+      id: inverter1_battery_type_and_brand
+    inverter2_battery_type_and_brand:
+      name: "Inverter 2 Battery Type And Brand"
+      id: inverter2_battery_type_and_brand
+    inverter1_bms_max_charge_current:
+      name: "Inverter 1 BMS Max Charge Current"
+      id: inverter1_bms_max_charge_current
+    inverter2_bms_max_charge_current:
+      name: "Inverter 2 BMS Max Charge Current"
+      id: inverter2_bms_max_charge_current
+    inverter1_bms_max_discharge_current:
+      name: "Inverter 1 BMS Max Discharge Current"
+      id: inverter1_bms_max_discharge_current
+    inverter2_bms_max_discharge_current:
+      name: "Inverter 2 BMS Max Discharge Current"
+      id: inverter2_bms_max_discharge_current
+    inverter1_bms_charge_voltage_reference:
+      name: "Inverter 1 BMS Charge Voltage Reference"
+      id: inverter1_bms_charge_voltage_reference
+    inverter2_bms_charge_voltage_reference:
+      name: "Inverter 2 BMS Charge Voltage Reference"
+      id: inverter2_bms_charge_voltage_reference
+    inverter1_bms_discharge_cutoff_voltage:
+      name: "Inverter 1 BMS Discharge Cutoff Voltage"
+      id: inverter1_bms_discharge_cutoff_voltage
+    inverter2_bms_discharge_cutoff_voltage:
+      name: "Inverter 2 BMS Discharge Cutoff Voltage"
+      id: inverter2_bms_discharge_cutoff_voltage
+    inverter1_bms_battery_current:
+      name: "Inverter 1 BMS Battery Current"
+      id: inverter1_bms_battery_current
+    inverter2_bms_battery_current:
+      name: "Inverter 2 BMS Battery Current"
+      id: inverter2_bms_battery_current
+    inverter1_bms_fault_code:
+      name: "Inverter 1 BMS Fault Code"
+      id: inverter1_bms_fault_code
+    inverter2_bms_fault_code:
+      name: "Inverter 2 BMS Fault Code"
+      id: inverter2_bms_fault_code
+    inverter1_bms_warning_code:
+      name: "Inverter 1 BMS Warning Code"
+      id: inverter1_bms_warning_code
+    inverter2_bms_warning_code:
+      name: "Inverter 2 BMS Warning Code"
+      id: inverter2_bms_warning_code
+    inverter1_bms_max_cell_voltage:
+      name: "Inverter 1 BMS Max Cell Voltage"
+      id: inverter1_bms_max_cell_voltage
+    inverter2_bms_max_cell_voltage:
+      name: "Inverter 2 BMS Max Cell Voltage"
+      id: inverter2_bms_max_cell_voltage
+    inverter1_bms_min_cell_voltage:
+      name: "Inverter 1 BMS Min Cell Voltage"
+      id: inverter1_bms_min_cell_voltage
+    inverter2_bms_min_cell_voltage:
+      name: "Inverter 2 BMS Min Cell Voltage"
+      id: inverter2_bms_min_cell_voltage
+    inverter1_bms_min_cell_temperature:
+      name: "Inverter 1 BMS Min Cell Temperature"
+      id: inverter1_bms_min_cell_temperature
+    inverter2_bms_min_cell_temperature:
+      name: "Inverter 2 BMS Min Cell Temperature"
+      id: inverter2_bms_min_cell_temperature
+    inverter1_bms_firmware_update_state:
+      name: "Inverter 1 BMS Firmware Update State"
+      id: inverter1_bms_firmware_update_state
+    inverter2_bms_firmware_update_state:
+      name: "Inverter 2 BMS Firmware Update State"
+      id: inverter2_bms_firmware_update_state
+    inverter1_bms_cycle_count:
+      name: "Inverter 1 BMS Cycle Count"
+      id: inverter1_bms_cycle_count
+    inverter2_bms_cycle_count:
+      name: "Inverter 2 BMS Cycle Count"
+      id: inverter2_bms_cycle_count
+    inverter1_inverter_battery_voltage_sample:
+      name: "Inverter 1 Inverter Battery Voltage Sample"
+      id: inverter1_inverter_battery_voltage_sample
+    inverter2_inverter_battery_voltage_sample:
+      name: "Inverter 2 Inverter Battery Voltage Sample"
+      id: inverter2_inverter_battery_voltage_sample
+    inverter1_charge_energy_today:
+      name: "Inverter 1 Charge Energy Today"
+      id: inverter1_charge_energy_today
+    inverter2_charge_energy_today:
+      name: "Inverter 2 Charge Energy Today"
+      id: inverter2_charge_energy_today
+    inverter1_discharge_energy_today:
+      name: "Inverter 1 Discharge Energy Today"
+      id: inverter1_discharge_energy_today
+    inverter2_discharge_energy_today:
+      name: "Inverter 2 Discharge Energy Today"
+      id: inverter2_discharge_energy_today
+    inverter1_charge_energy_total:
+      name: "Inverter 1 Charge Energy Total"
+      id: inverter1_charge_energy_total
+    inverter2_charge_energy_total:
+      name: "Inverter 2 Charge Energy Total"
+      id: inverter2_charge_energy_total
+    inverter1_discharge_energy_total:
+      name: "Inverter 1 Discharge Energy Total"
+      id: inverter1_discharge_energy_total
+    inverter2_discharge_energy_total:
+      name: "Inverter 2 Discharge Energy Total"
+      id: inverter2_discharge_energy_total
+    inverter1_grid_voltage:
+      name: "Inverter 1 Grid Voltage"
+      id: inverter1_grid_voltage
+    inverter2_grid_voltage:
+      name: "Inverter 2 Grid Voltage"
+      id: inverter2_grid_voltage
+    inverter1_grid_voltage_s:
+      name: "Inverter 1 Grid Voltage S-Phase"
+      id: inverter1_grid_voltage_s
+    inverter2_grid_voltage_s:
+      name: "Inverter 2 Grid Voltage S-Phase"
+      id: inverter2_grid_voltage_s
+    inverter1_grid_voltage_t:
+      name: "Inverter 1 Grid Voltage T-Phase"
+      id: inverter1_grid_voltage_t
+    inverter2_grid_voltage_t:
+      name: "Inverter 2 Grid Voltage T-Phase"
+      id: inverter2_grid_voltage_t
+    inverter1_grid_frequency:
+      name: "Inverter 1 Grid Frequency"
+      id: inverter1_grid_frequency
+    inverter2_grid_frequency:
+      name: "Inverter 2 Grid Frequency"
+      id: inverter2_grid_frequency
+    inverter1_inverter_power:
+      name: "Inverter 1 Inverter Power"
+      id: inverter1_inverter_power
+    inverter2_inverter_power:
+      name: "Inverter 2 Inverter Power"
+      id: inverter2_inverter_power
+    inverter1_ac_charging_rectification_power:
+      name: "Inverter 1 AC Charging Rectification Power"
+      id: inverter1_ac_charging_rectification_power
+    inverter2_ac_charging_rectification_power:
+      name: "Inverter 2 AC Charging Rectification Power"
+      id: inverter2_ac_charging_rectification_power
+    inverter1_inverter_current:
+      name: "Inverter 1 Inverter Current"
+      id: inverter1_inverter_current
+    inverter2_inverter_current:
+      name: "Inverter 2 Inverter Current"
+      id: inverter2_inverter_current
+    inverter1_power_factor:
+      name: "Inverter 1 Power Factor"
+      id: inverter1_power_factor
+    inverter2_power_factor:
+      name: "Inverter 2 Power Factor"
+      id: inverter2_power_factor
+    inverter1_energy_to_grid_today:
+      name: "Inverter 1 Energy To Grid Today"
+      id: inverter1_energy_to_grid_today
+    inverter2_energy_to_grid_today:
+      name: "Inverter 2 Energy To Grid Today"
+      id: inverter2_energy_to_grid_today
+    inverter1_energy_from_grid_today:
+      name: "Inverter 1 Energy From Grid Today"
+      id: inverter1_energy_from_grid_today
+    inverter2_energy_from_grid_today:
+      name: "Inverter 2 Energy From Grid Today"
+      id: inverter2_energy_from_grid_today
+    inverter1_energy_to_grid_total:
+      name: "Inverter 1 Energy To Grid Total"
+      id: inverter1_energy_to_grid_total
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f kWh", x);
+              const char *current = lv_label_get_text(id(inv1_energy_to_grid_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv1_energy_to_grid_total_label), text);
+                lv_obj_send_event(id(inv1_energy_to_grid_total_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_energy_to_grid_total:
+      name: "Inverter 2 Energy To Grid Total"
+      id: inverter2_energy_to_grid_total
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              snprintf(text, sizeof(text), "%.1f kWh", x);
+              const char *current = lv_label_get_text(id(inv2_energy_to_grid_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(inv2_energy_to_grid_total_label), text);
+                lv_obj_send_event(id(inv2_energy_to_grid_total_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_energy_from_grid_total:
+      name: "Inverter 1 Energy From Grid Total"
+      id: inverter1_energy_from_grid_total
+    inverter2_energy_from_grid_total:
+      name: "Inverter 2 Energy From Grid Total"
+      id: inverter2_energy_from_grid_total
+    inverter1_ongrid_load_power:
+      name: "Inverter 1 On-Grid Load Power"
+      id: inverter1_ongrid_load_power
+    inverter2_ongrid_load_power:
+      name: "Inverter 2 On-Grid Load Power"
+      id: inverter2_ongrid_load_power
+    inverter1_bus1_voltage:
+      name: "Inverter 1 Bus 1 Voltage"
+      id: inverter1_bus1_voltage
+    inverter2_bus1_voltage:
+      name: "Inverter 2 Bus 1 Voltage"
+      id: inverter2_bus1_voltage
+    inverter1_bus2_voltage:
+      name: "Inverter 1 Bus 2 Voltage"
+      id: inverter1_bus2_voltage
+    inverter2_bus2_voltage:
+      name: "Inverter 2 Bus 2 Voltage"
+      id: inverter2_bus2_voltage
+    inverter1_half_bus_voltage:
+      name: "Inverter 1 Half Bus Voltage"
+      id: inverter1_half_bus_voltage
+    inverter2_half_bus_voltage:
+      name: "Inverter 2 Half Bus Voltage"
+      id: inverter2_half_bus_voltage
+    inverter1_eps_voltage:
+      name: "Inverter 1 EPS Voltage"
+      id: inverter1_eps_voltage
+    inverter2_eps_voltage:
+      name: "Inverter 2 EPS Voltage"
+      id: inverter2_eps_voltage
+    inverter1_eps_voltage_s:
+      name: "Inverter 1 EPS Voltage S-Phase"
+      id: inverter1_eps_voltage_s
+    inverter2_eps_voltage_s:
+      name: "Inverter 2 EPS Voltage S-Phase"
+      id: inverter2_eps_voltage_s
+    inverter1_eps_voltage_t:
+      name: "Inverter 1 EPS Voltage T-Phase"
+      id: inverter1_eps_voltage_t
+    inverter2_eps_voltage_t:
+      name: "Inverter 2 EPS Voltage T-Phase"
+      id: inverter2_eps_voltage_t
+    inverter1_eps_frequency:
+      name: "Inverter 1 EPS Frequency"
+      id: inverter1_eps_frequency
+    inverter2_eps_frequency:
+      name: "Inverter 2 EPS Frequency"
+      id: inverter2_eps_frequency
+    inverter1_eps_power:
+      name: "Inverter 1 EPS Power"
+      id: inverter1_eps_power
+    inverter2_eps_power:
+      name: "Inverter 2 EPS Power"
+      id: inverter2_eps_power
+    inverter1_eps_apparent_power:
+      name: "Inverter 1 EPS Apparent Power"
+      id: inverter1_eps_apparent_power
+    inverter2_eps_apparent_power:
+      name: "Inverter 2 EPS Apparent Power"
+      id: inverter2_eps_apparent_power
+    inverter1_eps_energy_today:
+      name: "Inverter 1 EPS Energy Today"
+      id: inverter1_eps_energy_today
+    inverter2_eps_energy_today:
+      name: "Inverter 2 EPS Energy Today"
+      id: inverter2_eps_energy_today
+    inverter1_eps_energy_total:
+      name: "Inverter 1 EPS Energy Total"
+      id: inverter1_eps_energy_total
+    inverter2_eps_energy_total:
+      name: "Inverter 2 EPS Energy Total"
+      id: inverter2_eps_energy_total
+    inverter1_internal_temperature:
+      name: "Inverter 1 Internal Temperature"
+      id: inverter1_internal_temperature
+    inverter2_internal_temperature:
+      name: "Inverter 2 Internal Temperature"
+      id: inverter2_internal_temperature
+    inverter1_radiator_temperature:
+      name: "Inverter 1 Radiator Temperature"
+      id: inverter1_radiator_temperature
+    inverter2_radiator_temperature:
+      name: "Inverter 2 Radiator Temperature"
+      id: inverter2_radiator_temperature
+    inverter1_radiator_temperature_2:
+      name: "Inverter 1 Radiator Temperature 2"
+      id: inverter1_radiator_temperature_2
+    inverter2_radiator_temperature_2:
+      name: "Inverter 2 Radiator Temperature 2"
+      id: inverter2_radiator_temperature_2
+    inverter1_inverter_state:
+      name: "Inverter 1 Inverter State"
+      id: inverter1_inverter_state
+    inverter2_inverter_state:
+      name: "Inverter 2 Inverter State"
+      id: inverter2_inverter_state
+    inverter1_internal_fault_code:
+      name: "Inverter 1 Internal Fault Code"
+      id: inverter1_internal_fault_code
+    inverter2_internal_fault_code:
+      name: "Inverter 2 Internal Fault Code"
+      id: inverter2_internal_fault_code
+    inverter1_ac_input_type:
+      name: "Inverter 1 AC Input Type"
+      id: inverter1_ac_input_type
+    inverter2_ac_input_type:
+      name: "Inverter 2 AC Input Type"
+      id: inverter2_ac_input_type
+    inverter1_auto_test_status:
+      name: "Inverter 1 Auto Test Status"
+      id: inverter1_auto_test_status
+    inverter2_auto_test_status:
+      name: "Inverter 2 Auto Test Status"
+      id: inverter2_auto_test_status
+    inverter1_inverter_energy_today:
+      name: "Inverter 1 Inverter Energy Today"
+      id: inverter1_inverter_energy_today
+    inverter2_inverter_energy_today:
+      name: "Inverter 2 Inverter Energy Today"
+      id: inverter2_inverter_energy_today
+    inverter1_ac_charge_energy_today:
+      name: "Inverter 1 AC Charge Energy Today"
+      id: inverter1_ac_charge_energy_today
+    inverter2_ac_charge_energy_today:
+      name: "Inverter 2 AC Charge Energy Today"
+      id: inverter2_ac_charge_energy_today
+    inverter1_inverter_energy_total:
+      name: "Inverter 1 Inverter Energy Total (Raw)"
+      id: inverter1_inverter_energy_total
+    inverter2_inverter_energy_total:
+      name: "Inverter 2 Inverter Energy Total (Raw)"
+      id: inverter2_inverter_energy_total
+    inverter1_ac_charge_energy_total:
+      name: "Inverter 1 AC Charge Energy Total"
+      id: inverter1_ac_charge_energy_total
+    inverter2_ac_charge_energy_total:
+      name: "Inverter 2 AC Charge Energy Total"
+      id: inverter2_ac_charge_energy_total
+    inverter1_total_running_time:
+      name: "Inverter 1 Total Running Time"
+      id: inverter1_total_running_time
+    inverter2_total_running_time:
+      name: "Inverter 2 Total Running Time"
+      id: inverter2_total_running_time
+    inverter1_generator_voltage:
+      name: "Inverter 1 Generator Voltage"
+      id: inverter1_generator_voltage
+    inverter2_generator_voltage:
+      name: "Inverter 2 Generator Voltage"
+      id: inverter2_generator_voltage
+    inverter1_generator_frequency:
+      name: "Inverter 1 Generator Frequency"
+      id: inverter1_generator_frequency
+    inverter2_generator_frequency:
+      name: "Inverter 2 Generator Frequency"
+      id: inverter2_generator_frequency
+    inverter1_generator_power:
+      name: "Inverter 1 Generator Power"
+      id: inverter1_generator_power
+    inverter2_generator_power:
+      name: "Inverter 2 Generator Power"
+      id: inverter2_generator_power
+    inverter1_generator_energy_today:
+      name: "Inverter 1 Generator Energy Today"
+      id: inverter1_generator_energy_today
+    inverter2_generator_energy_today:
+      name: "Inverter 2 Generator Energy Today"
+      id: inverter2_generator_energy_today
+    inverter1_pv1_current:
+      name: "Inverter 1 PV1 Current"
+      id: inverter1_pv1_current
+    inverter2_pv1_current:
+      name: "Inverter 2 PV1 Current"
+      id: inverter2_pv1_current
+    inverter1_pv2_current:
+      name: "Inverter 1 PV2 Current"
+      id: inverter1_pv2_current
+    inverter2_pv2_current:
+      name: "Inverter 2 PV2 Current"
+      id: inverter2_pv2_current
+    inverter1_pv3_current:
+      name: "Inverter 1 PV3 Current"
+      id: inverter1_pv3_current
+    inverter2_pv3_current:
+      name: "Inverter 2 PV3 Current"
+      id: inverter2_pv3_current
+    inverter1_battery_flow:
+      name: "Inverter 1 Battery Flow"
+      id: inverter1_battery_flow
+    inverter2_battery_flow:
+      name: "Inverter 2 Battery Flow"
+      id: inverter2_battery_flow
+    inverter1_bms_cell_difference:
+      name: "Inverter 1 BMS Cell Difference"
+      id: inverter1_bms_cell_difference
+    inverter2_bms_cell_difference:
+      name: "Inverter 2 BMS Cell Difference"
+      id: inverter2_bms_cell_difference
+    inverter1_grid_connected:
+      name: "Inverter 1 Grid Connected"
+      id: inverter1_grid_connected
+    inverter2_grid_connected:
+      name: "Inverter 2 Grid Connected"
+      id: inverter2_grid_connected
+    inverter1_active_fault_code:
+      name: "Inverter 1 Active Fault Code"
+      id: inverter1_active_fault_code
+    inverter2_active_fault_code:
+      name: "Inverter 2 Active Fault Code"
+      id: inverter2_active_fault_code
+    inverter1_active_warning_code:
+      name: "Inverter 1 Active Warning Code"
+      id: inverter1_active_warning_code
+    inverter2_active_warning_code:
+      name: "Inverter 2 Active Warning Code"
+      id: inverter2_active_warning_code
+binary_sensor:
+  - platform: display_protocol_uart
+    display_protocol_uart_id: gateway_receiver
+    inverter1_gateway_data_fresh:
+      name: "Inverter 1 Gateway Data Fresh"
+      id: inverter1_gateway_data_fresh
+    inverter2_gateway_data_fresh:
+      name: "Inverter 2 Gateway Data Fresh"
+      id: inverter2_gateway_data_fresh
+    inverter1_gateway_link_connected:
+      name: "Inverter 1 Gateway Link Connected"
+      id: inverter1_gateway_link_connected
+    inverter2_gateway_link_connected:
+      name: "Inverter 2 Gateway Link Connected"
+      id: inverter2_gateway_link_connected
+    inverter1_luxpower_tcp_connected:
+      name: "Inverter 1 LuxPower TCP Connected"
+      id: inverter1_luxpower_tcp_connected
+    inverter2_luxpower_tcp_connected:
+      name: "Inverter 2 LuxPower TCP Connected"
+      id: inverter2_luxpower_tcp_connected
+    inverter1_input_cache_valid:
+      name: "Inverter 1 Input Cache Valid"
+      id: inverter1_input_cache_valid
+    inverter2_input_cache_valid:
+      name: "Inverter 2 Input Cache Valid"
+      id: inverter2_input_cache_valid
+    inverter1_holding_cache_valid:
+      name: "Inverter 1 Holding Cache Valid"
+      id: inverter1_holding_cache_valid
+    inverter2_holding_cache_valid:
+      name: "Inverter 2 Holding Cache Valid"
+      id: inverter2_holding_cache_valid
+    inverter1_snapshot_values_valid:
+      name: "Inverter 1 Snapshot Values Valid"
+      id: inverter1_snapshot_values_valid
+    inverter2_snapshot_values_valid:
+      name: "Inverter 2 Snapshot Values Valid"
+      id: inverter2_snapshot_values_valid
+    inverter1_feed_in_grid_enabled:
+      name: "Inverter 1 Feed-In Grid Enabled"
+      id: inverter1_feed_in_grid_enabled
+    inverter2_feed_in_grid_enabled:
+      name: "Inverter 2 Feed-In Grid Enabled"
+      id: inverter2_feed_in_grid_enabled

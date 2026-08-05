@@ -1,0 +1,116 @@
+// AUTO-GENERATED - DO NOT EDIT MANUALLY
+#pragma once
+
+#include <stdint.h>
+
+namespace esphome {
+namespace display_protocol_uart {
+
+// update_class is informational here -- Display accepts fields
+// regardless of class (section 13); it is not used to gate publish.
+struct DisplayProtocolEntityMetadata {
+  uint16_t field_id;
+  const char *key;
+  const char *name;
+  const char *unit;
+  uint8_t accuracy_decimals;
+  const char *update_class;
+};
+
+static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] = {
+  {1001, "pv1_power", "PV1 Power", "W", 0, "FAST"},
+  {1002, "pv2_power", "PV2 Power", "W", 0, "FAST"},
+  {2001, "battery_soc", "Battery SOC", "%", 1, "FAST"},
+  {2002, "battery_charge_power", "Battery Charge Power", "W", 0, "FAST"},
+  {2003, "battery_discharge_power", "Battery Discharge Power", "W", 0, "FAST"},
+  {5001, "pv1_energy_total", "PV1 Energy Total", "kWh", 3, "SLOW"},
+  {7001, "feed_in_grid_enabled", "Feed-In Grid Enabled", "", 0, "NORMAL"},
+  {9001, "battery_capacity", "Battery Capacity", "Ah", 0, "SLOW"},
+  {9002, "bms_max_cell_temperature", "BMS Max Cell Temperature", "deg C", 1, "NORMAL"},
+  {9003, "power_to_grid", "Power To Grid", "W", 0, "FAST"},
+  {9004, "power_from_grid", "Power From Grid", "W", 0, "FAST"},
+  {9005, "grid_flow", "Grid Flow", "W", 0, "NORMAL"},
+  {9006, "pv1_voltage", "PV1 Voltage", "V", 1, "NORMAL"},
+  {9007, "pv2_voltage", "PV2 Voltage", "V", 1, "NORMAL"},
+  {9008, "pv3_voltage", "PV3 Voltage", "V", 1, "NORMAL"},
+  {9009, "pv3_power", "PV3 Power", "W", 0, "NORMAL"},
+  {9010, "pv1_energy_today", "PV1 Energy Today", "kWh", 1, "SLOW"},
+  {9011, "pv2_energy_today", "PV2 Energy Today", "kWh", 1, "SLOW"},
+  {9012, "pv3_energy_today", "PV3 Energy Today", "kWh", 1, "SLOW"},
+  {9013, "pv2_energy_total", "PV2 Energy Total", "kWh", 1, "SLOW"},
+  {9014, "pv3_energy_total", "PV3 Energy Total", "kWh", 1, "SLOW"},
+  {9015, "battery_voltage", "Battery Voltage", "V", 1, "NORMAL"},
+  {9016, "battery_soh", "Battery SOH", "%", 0, "SLOW"},
+  {9017, "battery_temperature", "Battery Temperature", "deg C", 0, "NORMAL"},
+  {9018, "battery_parallel_number", "Battery Parallel Number", "", 0, "SLOW"},
+  {9019, "battery_type_and_brand", "Battery Type And Brand", "", 0, "SLOW"},
+  {9020, "bms_max_charge_current", "BMS Max Charge Current", "A", 1, "SLOW"},
+  {9021, "bms_max_discharge_current", "BMS Max Discharge Current", "A", 1, "SLOW"},
+  {9022, "bms_charge_voltage_reference", "BMS Charge Voltage Reference", "V", 1, "SLOW"},
+  {9023, "bms_discharge_cutoff_voltage", "BMS Discharge Cutoff Voltage", "V", 1, "SLOW"},
+  {9024, "bms_battery_current", "BMS Battery Current", "A", 1, "NORMAL"},
+  {9025, "bms_fault_code", "BMS Fault Code", "", 0, "NORMAL"},
+  {9026, "bms_warning_code", "BMS Warning Code", "", 0, "NORMAL"},
+  {9027, "bms_max_cell_voltage", "BMS Max Cell Voltage", "V", 3, "NORMAL"},
+  {9028, "bms_min_cell_voltage", "BMS Min Cell Voltage", "V", 3, "NORMAL"},
+  {9029, "bms_min_cell_temperature", "BMS Min Cell Temperature", "deg C", 1, "NORMAL"},
+  {9030, "bms_firmware_update_state", "BMS Firmware Update State", "", 0, "SLOW"},
+  {9031, "bms_cycle_count", "BMS Cycle Count", "cycles", 0, "SLOW"},
+  {9032, "inverter_battery_voltage_sample", "Inverter Battery Voltage Sample", "V", 1, "NORMAL"},
+  {9033, "charge_energy_today", "Charge Energy Today", "kWh", 1, "SLOW"},
+  {9034, "discharge_energy_today", "Discharge Energy Today", "kWh", 1, "SLOW"},
+  {9035, "charge_energy_total", "Charge Energy Total", "kWh", 1, "SLOW"},
+  {9036, "discharge_energy_total", "Discharge Energy Total", "kWh", 1, "SLOW"},
+  {9037, "grid_voltage", "Grid Voltage", "V", 1, "NORMAL"},
+  {9038, "grid_voltage_s", "Grid Voltage S-Phase", "V", 1, "NORMAL"},
+  {9039, "grid_voltage_t", "Grid Voltage T-Phase", "V", 1, "NORMAL"},
+  {9040, "grid_frequency", "Grid Frequency", "Hz", 2, "NORMAL"},
+  {9041, "inverter_power", "Inverter Power", "W", 0, "NORMAL"},
+  {9042, "ac_charging_rectification_power", "AC Charging Rectification Power", "W", 0, "NORMAL"},
+  {9043, "inverter_current", "Inverter Current", "A", 2, "NORMAL"},
+  {9044, "power_factor", "Power Factor", "%", 3, "NORMAL"},
+  {9045, "energy_to_grid_today", "Energy To Grid Today", "kWh", 1, "SLOW"},
+  {9046, "energy_from_grid_today", "Energy From Grid Today", "kWh", 1, "SLOW"},
+  {9047, "energy_to_grid_total", "Energy To Grid Total", "kWh", 1, "SLOW"},
+  {9048, "energy_from_grid_total", "Energy From Grid Total", "kWh", 1, "SLOW"},
+  {9049, "ongrid_load_power", "On-Grid Load Power", "W", 0, "NORMAL"},
+  {9050, "bus1_voltage", "Bus 1 Voltage", "V", 1, "NORMAL"},
+  {9051, "bus2_voltage", "Bus 2 Voltage", "V", 1, "NORMAL"},
+  {9052, "half_bus_voltage", "Half Bus Voltage", "V", 1, "NORMAL"},
+  {9053, "eps_voltage", "EPS Voltage", "V", 1, "NORMAL"},
+  {9054, "eps_voltage_s", "EPS Voltage S-Phase", "V", 1, "NORMAL"},
+  {9055, "eps_voltage_t", "EPS Voltage T-Phase", "V", 1, "NORMAL"},
+  {9056, "eps_frequency", "EPS Frequency", "Hz", 2, "NORMAL"},
+  {9057, "eps_power", "EPS Power", "W", 0, "NORMAL"},
+  {9058, "eps_apparent_power", "EPS Apparent Power", "VA", 0, "NORMAL"},
+  {9059, "eps_energy_today", "EPS Energy Today", "kWh", 1, "SLOW"},
+  {9060, "eps_energy_total", "EPS Energy Total", "kWh", 1, "SLOW"},
+  {9061, "internal_temperature", "Internal Temperature", "deg C", 0, "NORMAL"},
+  {9062, "radiator_temperature", "Radiator Temperature", "deg C", 0, "NORMAL"},
+  {9063, "radiator_temperature_2", "Radiator Temperature 2", "deg C", 0, "NORMAL"},
+  {9064, "inverter_state", "Inverter State", "", 0, "NORMAL"},
+  {9065, "internal_fault_code", "Internal Fault Code", "", 0, "NORMAL"},
+  {9066, "ac_input_type", "AC Input Type", "", 0, "NORMAL"},
+  {9067, "auto_test_status", "Auto Test Status", "", 0, "NORMAL"},
+  {9068, "inverter_energy_today", "Inverter Energy Today", "kWh", 1, "SLOW"},
+  {9069, "ac_charge_energy_today", "AC Charge Energy Today", "kWh", 1, "SLOW"},
+  {9070, "inverter_energy_total", "Inverter Energy Total (Raw)", "kWh", 1, "SLOW"},
+  {9071, "ac_charge_energy_total", "AC Charge Energy Total", "kWh", 1, "SLOW"},
+  {9072, "total_running_time", "Total Running Time", "s", 0, "SLOW"},
+  {9073, "generator_voltage", "Generator Voltage", "V", 1, "NORMAL"},
+  {9074, "generator_frequency", "Generator Frequency", "Hz", 2, "NORMAL"},
+  {9075, "generator_power", "Generator Power", "W", 0, "NORMAL"},
+  {9076, "generator_energy_today", "Generator Energy Today", "kWh", 1, "SLOW"},
+  {9077, "pv1_current", "PV1 Current", "A", 2, "NORMAL"},
+  {9078, "pv2_current", "PV2 Current", "A", 2, "NORMAL"},
+  {9079, "pv3_current", "PV3 Current", "A", 2, "NORMAL"},
+  {9080, "battery_flow", "Battery Flow", "W", 0, "NORMAL"},
+  {9081, "bms_cell_difference", "BMS Cell Difference", "V", 3, "NORMAL"},
+  {9082, "grid_connected", "Grid Connected", "", 0, "NORMAL"},
+  {9083, "active_fault_code", "Active Fault Code", "", 0, "NORMAL"},
+  {9084, "active_warning_code", "Active Warning Code", "", 0, "NORMAL"},
+  {9085, "load_power", "Load Power", "W", 0, "FAST"},
+};
+
+}  // namespace display_protocol_uart
+}  // namespace esphome

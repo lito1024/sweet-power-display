@@ -1,0 +1,319 @@
+lvgl:
+  displays:
+    - main_display
+  buffer_size: 12%
+  default_font: montserrat_14
+  bg_color: 0x101216
+  text_color: 0xFFFFFF
+  pad_all: 0
+  widgets:
+    - obj:
+        width: 100%
+        height: 100%
+        bg_color: 0x101216
+        border_width: 2
+        border_color: 0xFFFFFF
+        radius: 0
+        pad_all: 0
+        scrollable: false
+        widgets:
+          - obj:
+              x: 0
+              y: 0
+              width: 100%
+              height: 24
+              bg_color: 0x152033
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B00 Y000-023 TOP"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 24
+              width: 100%
+              height: 24
+              bg_color: 0x22301F
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B01 Y024-047"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 48
+              width: 100%
+              height: 24
+              bg_color: 0x311B2B
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B02 Y048-071"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 72
+              width: 100%
+              height: 24
+              bg_color: 0x24313A
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B03 Y072-095"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 96
+              width: 100%
+              height: 24
+              bg_color: 0x332819
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B04 Y096-119"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 120
+              width: 100%
+              height: 24
+              bg_color: 0x172A32
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B05 Y120-143"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 144
+              width: 100%
+              height: 24
+              bg_color: 0x2B2033
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B06 Y144-167"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 168
+              width: 100%
+              height: 24
+              bg_color: 0x1D3327
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B07 Y168-191"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 192
+              width: 100%
+              height: 24
+              bg_color: 0x33211F
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B08 Y192-215"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 216
+              width: 100%
+              height: 24
+              bg_color: 0x1F2638
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B09 Y216-239 CENTER-"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 240
+              width: 100%
+              height: 24
+              bg_color: 0x26381F
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B10 Y240-263 CENTER+"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 264
+              width: 100%
+              height: 24
+              bg_color: 0x382033
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B11 Y264-287"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 288
+              width: 100%
+              height: 24
+              bg_color: 0x20383A
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B12 Y288-311"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 312
+              width: 100%
+              height: 24
+              bg_color: 0x3A2A1B
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B13 Y312-335"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 336
+              width: 100%
+              height: 24
+              bg_color: 0x1B3038
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B14 Y336-359"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 360
+              width: 100%
+              height: 24
+              bg_color: 0x30213A
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B15 Y360-383"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 384
+              width: 100%
+              height: 24
+              bg_color: 0x203A26
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B16 Y384-407"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 408
+              width: 100%
+              height: 24
+              bg_color: 0x3A2520
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B17 Y408-431"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 432
+              width: 100%
+              height: 24
+              bg_color: 0x1F2B3A
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B18 Y432-455"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 0
+              y: 456
+              width: 100%
+              height: 24
+              bg_color: 0x2F351C
+              border_width: 0
+              radius: 0
+              widgets:
+                - label:
+                    text: "B19 Y456-479 BOTTOM"
+                    align: left_mid
+                    x: 8
+          - obj:
+              x: 199
+              y: 0
+              width: 2
+              height: 100%
+              bg_color: 0xFFFFFF
+              border_width: 0
+              radius: 0
+          - obj:
+              x: 399
+              y: 0
+              width: 2
+              height: 100%
+              bg_color: 0xF7D154
+              border_width: 0
+              radius: 0
+          - obj:
+              x: 599
+              y: 0
+              width: 2
+              height: 100%
+              bg_color: 0xFFFFFF
+              border_width: 0
+              radius: 0
+          - label:
+              text: "TOP EDGE"
+              align: top_right
+              x: -8
+              y: 4
+              text_color: 0xFFFFFF
+          - label:
+              text: "CENTER Y240"
+              align: center
+              text_color: 0xF7D154
+          - label:
+              text: "BOTTOM EDGE"
+              align: bottom_right
+              x: -8
+              y: -4
+              text_color: 0xFFFFFF
