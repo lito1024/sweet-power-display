@@ -10,7 +10,7 @@
 # receiver component.
 
 esphome:
-  name: external-component-usage-example
+  name: display-protocol-example
   # ESP-TELEMETRY is a plain PlatformIO/Arduino library dependency, not an
   # ESPHome external component -- it must be declared here explicitly by
   # any consuming project. display_protocol_uart's own codegen
