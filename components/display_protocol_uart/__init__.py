@@ -4,7 +4,7 @@ from esphome.components import uart
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["sensor", "binary_sensor"]
+AUTO_LOAD = ["sensor", "binary_sensor", "text_sensor"]
 MULTI_CONF = False
 
 display_protocol_uart_ns = cg.esphome_ns.namespace("display_protocol_uart")

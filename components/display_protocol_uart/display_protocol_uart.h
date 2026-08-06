@@ -5,6 +5,7 @@
 
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/core/component.h"
 
@@ -146,6 +147,10 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_snapshot_values_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->snapshot_values_valid_sensor_[device_index] = sensor; }
   void set_feed_in_grid_enabled_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->feed_in_grid_enabled_sensor_[device_index] = sensor; }
 
+  // Stage 33: derived entirely from the existing have_snapshot_/data_fresh_
+  // state (no new timeout mechanism) -- see update_connection_status_.
+  void set_connection_status_text_sensor(uint8_t device_index, text_sensor::TextSensor *sensor) { this->connection_status_text_sensor_[device_index] = sensor; }
+
   bool send_raw_frame(const uint8_t *data, size_t length);
 
  protected:
@@ -162,6 +167,12 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void update_stale_state_(uint32_t now);
   void publish_binary_(binary_sensor::BinarySensor *sensor, bool value);
   void publish_float_(sensor::Sensor *sensor, float value);
+  void publish_text_(text_sensor::TextSensor *sensor, const char *value);
+  // Stage 33: CONNECTED/STALE/DISCONNECTED, purely derived from
+  // have_snapshot_[device_index]/data_fresh_[device_index] -- the same
+  // freshness state update_stale_state_ and the frame handlers already
+  // maintain. Called from those existing update points, not a new timer.
+  void update_connection_status_(uint8_t device_index);
   void trace_frame_(const ESPTelemetry::Frame &frame);
 
   ESPTelemetry::Decoder decoder_;
@@ -301,6 +312,8 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   binary_sensor::BinarySensor *holding_cache_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *snapshot_values_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *feed_in_grid_enabled_sensor_[kDeviceCount] = {nullptr, nullptr};
+
+  text_sensor::TextSensor *connection_status_text_sensor_[kDeviceCount] = {nullptr, nullptr};
 };
 
 }  // namespace display_protocol_uart

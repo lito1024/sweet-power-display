@@ -431,6 +431,41 @@ def test_unrecognized_device_id_not_recorded() -> None:
     assert all(device_id in (1, 2) for device_id, _field_id in rx.device_values)
 
 
+def connection_status(have_snapshot: bool, data_fresh: bool) -> str:
+    # Mirrors DisplayProtocolUARTComponent::update_connection_status_
+    # (Stage 33) exactly -- purely derived from have_snapshot_/data_fresh_,
+    # no separate timeout mechanism.
+    if not have_snapshot:
+        return "DISCONNECTED"
+    if data_fresh:
+        return "CONNECTED"
+    return "STALE"
+
+
+def test_connection_status_disconnected_before_first_frame() -> None:
+    assert connection_status(have_snapshot=False, data_fresh=False) == "DISCONNECTED"
+
+
+def test_connection_status_connected_when_fresh() -> None:
+    assert connection_status(have_snapshot=True, data_fresh=True) == "CONNECTED"
+
+
+def test_connection_status_stale_when_timed_out() -> None:
+    assert connection_status(have_snapshot=True, data_fresh=False) == "STALE"
+
+
+def test_connection_status_independent_per_device_via_receiver_state() -> None:
+    # End-to-end through the Receiver mirror: device 1 gets a frame (would
+    # be CONNECTED), device 2 never does (would stay DISCONNECTED) -- same
+    # have_snapshot_/data_fresh_ inputs the real component derives from.
+    rx = Receiver()
+    rx.feed(encode_v2(0, [(FIELD_PV1_POWER, 1)], msg_type=TYPE_FAST, device_id=1), now_ms=1000)
+    device1_has_snapshot = (1, FIELD_PV1_POWER) in rx.device_values
+    device2_has_snapshot = (2, FIELD_PV1_POWER) in rx.device_values
+    assert connection_status(device1_has_snapshot, not rx.stale_for_device(1, now_ms=1000)) == "CONNECTED"
+    assert connection_status(device2_has_snapshot, not rx.stale_for_device(2, now_ms=1000)) == "DISCONNECTED"
+
+
 def main() -> int:
     tests = [
         test_valid_snapshot,
@@ -458,6 +493,10 @@ def main() -> int:
         test_independent_unavailable_and_zero_per_device,
         test_independent_stale_state_per_device,
         test_unrecognized_device_id_not_recorded,
+        test_connection_status_disconnected_before_first_frame,
+        test_connection_status_connected_when_fresh,
+        test_connection_status_stale_when_timed_out,
+        test_connection_status_independent_per_device_via_receiver_state,
     ]
     for test in tests:
         test()

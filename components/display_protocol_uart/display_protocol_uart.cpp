@@ -146,6 +146,7 @@ void DisplayProtocolUARTComponent::handle_snapshot_frame_(const ESPTelemetry::Fr
   }
   this->link_connected_[device_index] = true;
   this->data_fresh_[device_index] = true;
+  this->update_connection_status_(static_cast<uint8_t>(device_index));
 
   this->trace_frame_(frame);
   this->publish_snapshot_(static_cast<uint8_t>(device_index), now);
@@ -201,6 +202,7 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
   }
   this->link_connected_[device_index] = true;
   this->data_fresh_[device_index] = true;
+  this->update_connection_status_(device_index);
 
   this->publish_float_(this->gateway_snapshot_age_sensor_[device_index], static_cast<float>(now - this->last_frame_ms_[device_index]));
   this->publish_float_(this->gateway_sequence_sensor_[device_index], static_cast<float>(this->last_sequence_[device_index]));
@@ -576,12 +578,27 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
 
     this->data_fresh_[device_index] = fresh;
     this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], fresh);
+    this->update_connection_status_(device_index);
     if (!fresh) {
       ESP_LOGW(TAG, "UART DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
     } else {
       ESP_LOGI(TAG, "UART LINK RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
     }
   }
+}
+
+void DisplayProtocolUARTComponent::update_connection_status_(uint8_t device_index) {
+  // Stage 33: CONNECTED/STALE/DISCONNECTED, derived purely from the
+  // existing have_snapshot_/data_fresh_ state -- no separate timeout.
+  const char *status;
+  if (!this->have_snapshot_[device_index]) {
+    status = "DISCONNECTED";
+  } else if (this->data_fresh_[device_index]) {
+    status = "CONNECTED";
+  } else {
+    status = "STALE";
+  }
+  this->publish_text_(this->connection_status_text_sensor_[device_index], status);
 }
 
 void DisplayProtocolUARTComponent::publish_binary_(binary_sensor::BinarySensor *sensor, bool value) {
@@ -596,6 +613,16 @@ void DisplayProtocolUARTComponent::publish_binary_(binary_sensor::BinarySensor *
 
 void DisplayProtocolUARTComponent::publish_float_(sensor::Sensor *sensor, float value) {
   if (sensor == nullptr) {
+    return;
+  }
+  sensor->publish_state(value);
+}
+
+void DisplayProtocolUARTComponent::publish_text_(text_sensor::TextSensor *sensor, const char *value) {
+  if (sensor == nullptr) {
+    return;
+  }
+  if (sensor->has_state() && sensor->state == value) {
     return;
   }
   sensor->publish_state(value);
