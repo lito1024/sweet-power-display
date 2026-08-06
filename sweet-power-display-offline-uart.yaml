@@ -1,13 +1,12 @@
-# SUPERSEDED (Stage 34) -- kept unflashed as the historical record of the
-# Stage 33 attempt. Do not flash this file. Running Wi-Fi/API/OTA/
-# web_server/captive_portal/improv_serial/safe_mode alongside LVGL on this
-# ESP32-S3 caused visible display jitter and mixed the HMI role with a
-# network-gateway role. The Home Assistant gateway responsibility moved to
-# a separate board (sweet-power-controller/, ESP32-S3-N16R8) that receives
-# telemetry directly over ESP-NOW rather than through the Display's UART
-# path. The Display's current production config is
-# sweet-power-display-offline-uart.yaml. See stages/Stage33.md (what this
-# file did) and stages/Stage34.md (why it was rolled back) and ADR-012.
+# Stage 34: dedicated offline UART display -- Stage 33's Wi-Fi/API/OTA/
+# web_server/captive_portal/improv_serial/safe_mode additions caused
+# visible display jitter and mixed HMI with network-gateway
+# responsibilities, so this is the pre-Stage-33 role restored: UART
+# receiver + LVGL only, no Wi-Fi, no ESPHome API, no OTA, no HA device
+# role. That role now belongs to the Sweet POWER Controller (a separate
+# board, sweet-power-controller/) -- see stages/Stage34.md and ADR-012.
+# `sweet-power-display-ha-gateway.yaml` is kept, unflashed, as the Stage
+# 33 historical record; it is not the production config.
 external_components:
   - source:
       type: local
@@ -38,43 +37,10 @@ logger:
   # Keep ESPHome logs on the native ESP32-S3 USB Serial/JTAG console.
   # GPIO43/GPIO44 are reserved below for the external Waveshare UART
   # connector to the Bridge, so UART0 logging would conflict with the
-  # telemetry receiver path. USB is recovery/debug only after this stage --
-  # normal operation and updates are OTA (see safe_mode/ota below).
+  # telemetry receiver path. Stage 34: this Display has no Wi-Fi/OTA, so
+  # USB is the only way to flash and the only way to view logs -- not a
+  # recovery-only fallback like the Stage 33 attempt assumed.
   hardware_uart: USB_SERIAL_JTAG
-
-# Stage 33: standard ESPHome network services. These exist ONLY to make
-# the Display a normal Home Assistant node (API) with OTA updates and a
-# local web UI -- telemetry never comes from Wi-Fi and never depends on
-# it. display_protocol_uart below reads exclusively from the dedicated
-# `uart:` (GPIO43/44, wired to the Bridge) regardless of Wi-Fi/API state.
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  ap:
-    ssid: "Sweet POWER Display Fallback"
-    password: !secret fallback_ap_password
-
-captive_portal:
-
-api:
-  encryption:
-    key: !secret api_encryption_key
-
-ota:
-  - platform: esphome
-    password: !secret ota_password
-
-# Rolls back to the last known-good firmware automatically after repeated
-# boot failures -- the safety net that makes OTA the normal update path
-# instead of USB.
-safe_mode:
-
-# Wi-Fi provisioning over the same USB Serial/JTAG console used for logs,
-# so initial/recovery setup doesn't require editing secrets.yaml + reflash.
-improv_serial:
-
-web_server:
-  version: 3
 
 i2c:
   sda: GPIO8
@@ -89,9 +55,11 @@ uart:
   id: gateway_uart
   # Waveshare Rev1.2 routes the external UART connector through the UART
   # selection switch to ESP_RXD/ESP_TXD. This is the ONLY telemetry source
-  # -- see stages/Stage33.md. The Display remains the only UART receiver
+  # -- see stages/Stage34.md. The Display remains the only UART receiver
   # in the architecture (LuxPower -> Gateway(s) -> ESP-NOW -> Bridge ->
-  # UART -> Display); this stage does not change that.
+  # UART -> Display); Stage 34 also added an independent ESP-NOW fan-out
+  # from the Bridge to a separate Controller board, which does not change
+  # the Display's UART-only role.
   rx_pin: GPIO44
   tx_pin: GPIO43
   baud_rate: 230400
@@ -103,8 +71,11 @@ uart:
 # sensor/text_sensor declared below (and the LVGL on_value lambdas further
 # down) reads the SAME underlying sensor objects this component publishes
 # -- there is no second telemetry pipeline and no display-only duplicate
-# state. Home Assistant (via `api:` above) and LVGL both observe these
-# exact entities.
+# state. Stage 34: there is no `api:`/Home Assistant role on this board
+# any more (see stages/Stage34.md) -- these entities exist purely so LVGL
+# can attach on_value triggers to a single source of truth, the same
+# pattern used when this page also fed Home Assistant in Stage 33.
+
 display_protocol_uart:
   id: gateway_receiver
   uart_id: gateway_uart
@@ -140,11 +111,14 @@ lvgl:
     label:
       bg_opa: transp
       text_color: 0xFFFFFF
-  # Stage 33: production HA-gateway page. Same monochrome two-column style
-  # as the Stage 32 validation page, trimmed to exactly the entities this
-  # stage publishes -- every label reads the SAME sensor object exposed to
-  # Home Assistant via `api:` (on_value triggers below), not a separate
-  # display-only value.
+  # Stage 34: dedicated offline production page (Stage 33's HA-gateway
+  # attempt is superseded -- see header comment). Same monochrome
+  # two-column style as the Stage 32 validation page, trimmed to exactly
+  # the entities this stage publishes internally -- every label reads the
+  # SAME sensor object `display_protocol_uart` publishes (on_value
+  # triggers below), not a separate display-only value. There is no
+  # Home Assistant API on this board anymore; these sensors are purely
+  # internal to LVGL.
   widgets:
     - obj:
         width: 100%
@@ -376,13 +350,14 @@ lvgl:
                       - label: {text: "Freshness :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
                       - label: {id: inv2_freshness_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
 
-# Stage 33: exactly the 8 power entities + Freshness per inverter -- the
-# only entities this stage publishes (see stages/Stage33.md). All other
-# catalog entities the component CAN publish are simply not declared here,
-# so they are never instantiated (the component no-ops publishing to a
-# null sensor pointer). Every on_value lambda below is attached directly
-# to the same sensor object exposed to Home Assistant -- not a separate
-# display-only variable.
+# Stage 34: exactly the 8 power entities + Freshness per inverter -- the
+# only entities declared here (see stages/Stage34.md). All other catalog
+# entities the component CAN publish are simply not declared, so they are
+# never instantiated (the component no-ops publishing to a null sensor
+# pointer). These sensors are purely internal state for LVGL's on_value
+# lambdas below -- there is no ESPHome API on this board to expose them
+# to, unlike the superseded Stage 33 attempt.
+
 sensor:
   - platform: display_protocol_uart
     display_protocol_uart_id: gateway_receiver
