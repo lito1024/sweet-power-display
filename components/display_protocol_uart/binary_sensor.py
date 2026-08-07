@@ -13,6 +13,10 @@ CONF_INPUT_CACHE_VALID = "input_cache_valid"
 CONF_HOLDING_CACHE_VALID = "holding_cache_valid"
 CONF_SNAPSHOT_VALUES_VALID = "snapshot_values_valid"
 CONF_FEED_IN_GRID_ENABLED = "feed_in_grid_enabled"
+# Stage 35: experimentally confirmed export-control readback (holding
+# register 21 bit 15) -- see stages/Stage35.md. Read-only, not the same
+# register as feed_in_grid_enabled above (which failed the same test).
+CONF_ZERO_EXPORT_ENABLED = "zero_export_enabled"
 
 BINARY_SENSOR_MAP = {
     CONF_GATEWAY_DATA_FRESH: ("set_gateway_data_fresh_sensor", DEVICE_CLASS_CONNECTIVITY),
@@ -22,6 +26,7 @@ BINARY_SENSOR_MAP = {
     CONF_HOLDING_CACHE_VALID: ("set_holding_cache_valid_sensor", None),
     CONF_SNAPSHOT_VALUES_VALID: ("set_snapshot_values_valid_sensor", None),
     CONF_FEED_IN_GRID_ENABLED: ("set_feed_in_grid_enabled_sensor", None),
+    CONF_ZERO_EXPORT_ENABLED: ("set_zero_export_enabled_sensor", None),
 }
 
 

@@ -130,6 +130,21 @@ CONF_ACTIVE_FAULT_CODE = "active_fault_code"
 CONF_ACTIVE_WARNING_CODE = "active_warning_code"
 # Stage 31: load_power (FieldId 9085), FAST class, via the new input block 2.
 CONF_LOAD_POWER = "load_power"
+# Stage 35: experimentally confirmed export-control readback (holding
+# register 103, raw == percent) -- see stages/Stage35.md. Read-only.
+CONF_MAX_BACKFLOW_POWER = "max_backflow_power"
+
+# Stage 37: presentation-layer derived values -- see recompute_derived_ in
+# display_protocol_uart.cpp. Per-device (Solar/Power/Grid/Battery) plus
+# TOTAL (both inverters combined, or unavailable if either inverter is).
+CONF_SOLAR = "solar"
+CONF_DERIVED_POWER = "derived_power"
+CONF_GRID_NET = "grid_net"
+CONF_BATTERY_NET = "battery_net"
+CONF_SOLAR_TOTAL = "solar_total"
+CONF_POWER_TOTAL = "power_total"
+CONF_GRID_TOTAL = "grid_total"
+CONF_BATTERY_TOTAL = "battery_total"
 
 SENSOR_MAP = {
     CONF_PV1_POWER: ("set_pv1_power_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
@@ -260,6 +275,17 @@ SENSOR_MAP = {
     CONF_ACTIVE_FAULT_CODE: ("set_active_fault_code_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_ACTIVE_WARNING_CODE: ("set_active_warning_code_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_LOAD_POWER: ("set_load_power_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_MAX_BACKFLOW_POWER: ("set_max_backflow_power_sensor", UNIT_PERCENT, None, STATE_CLASS_MEASUREMENT, 0),
+    CONF_SOLAR: ("set_solar_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_DERIVED_POWER: ("set_derived_power_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_GRID_NET: ("set_grid_net_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_BATTERY_NET: ("set_battery_net_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    # Stage 37: TOTAL (both inverters combined) -- single instance, not
+    # per-device, same mechanism as the whole-UART-link counters below.
+    CONF_SOLAR_TOTAL: ("set_solar_total_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_POWER_TOTAL: ("set_power_total_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_GRID_TOTAL: ("set_grid_total_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_BATTERY_TOTAL: ("set_battery_total_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
 }
 
 
@@ -289,6 +315,13 @@ GLOBAL_ONLY_KEYS = {
     CONF_UART_DECODE_ERRORS,
     CONF_UART_SEQUENCE_GAPS,
     CONF_UART_DUPLICATE_FRAMES,
+    # Stage 37: TOTAL derived sensors are also single-instance (both
+    # inverters combined into one value, not one per device) -- see
+    # combine_total_ in display_protocol_uart.cpp.
+    CONF_SOLAR_TOTAL,
+    CONF_POWER_TOTAL,
+    CONF_GRID_TOTAL,
+    CONF_BATTERY_TOTAL,
 }
 
 PER_DEVICE_SENSOR_MAP = {k: v for k, v in SENSOR_MAP.items() if k not in GLOBAL_ONLY_KEYS}

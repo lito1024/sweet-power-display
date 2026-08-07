@@ -146,10 +146,35 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_holding_cache_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->holding_cache_valid_sensor_[device_index] = sensor; }
   void set_snapshot_values_valid_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->snapshot_values_valid_sensor_[device_index] = sensor; }
   void set_feed_in_grid_enabled_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->feed_in_grid_enabled_sensor_[device_index] = sensor; }
+  // Stage 35: read-only, per stages/Stage35.md -- no write path exists here
+  // or anywhere else in the Display.
+  void set_zero_export_enabled_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->zero_export_enabled_sensor_[device_index] = sensor; }
+  void set_max_backflow_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->max_backflow_power_sensor_[device_index] = sensor; }
 
   // Stage 33: derived entirely from the existing have_snapshot_/data_fresh_
   // state (no new timeout mechanism) -- see update_connection_status_.
   void set_connection_status_text_sensor(uint8_t device_index, text_sensor::TextSensor *sensor) { this->connection_status_text_sensor_[device_index] = sensor; }
+
+  // Stage 37: presentation-layer derived values (Solar = PV1+PV2, Power =
+  // Load+EPS, Grid = ToGrid-FromGrid, Battery = Charge-Discharge), computed
+  // here from the existing per-device (device_id, FieldId) state -- see
+  // recompute_derived_. Not a second telemetry pipeline: these sensors are
+  // republished from the SAME raw values already decoded above, purely to
+  // give LVGL a single up-to-date number instead of duplicating the
+  // arithmetic in every YAML lambda. Unavailable/not-fresh inputs publish
+  // NAN (never 0) so the display can render "--" instead of a misleading
+  // value -- see update_stale_state_.
+  void set_solar_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->solar_sensor_[device_index] = sensor; }
+  void set_derived_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->derived_power_sensor_[device_index] = sensor; }
+  void set_grid_net_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->grid_net_sensor_[device_index] = sensor; }
+  void set_battery_net_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->battery_net_sensor_[device_index] = sensor; }
+  // TOTAL columns: sum of both inverters' derived value above, or NAN if
+  // either inverter's own value is NAN/unavailable (never treat a missing
+  // inverter as zero -- see combine_total_).
+  void set_solar_total_sensor(sensor::Sensor *sensor) { this->solar_total_sensor_ = sensor; }
+  void set_power_total_sensor(sensor::Sensor *sensor) { this->power_total_sensor_ = sensor; }
+  void set_grid_total_sensor(sensor::Sensor *sensor) { this->grid_total_sensor_ = sensor; }
+  void set_battery_total_sensor(sensor::Sensor *sensor) { this->battery_total_sensor_ = sensor; }
 
   bool send_raw_frame(const uint8_t *data, size_t length);
 
@@ -174,6 +199,15 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   // maintain. Called from those existing update points, not a new timer.
   void update_connection_status_(uint8_t device_index);
   void trace_frame_(const ESPTelemetry::Frame &frame);
+  // Stage 37: recomputes this device's Solar/Power/Grid/Battery from the
+  // current state of the raw sensor objects (not a separate cache -- see
+  // set_solar_sensor et al.), then recomputes all four TOTAL sensors.
+  // Called after every field update for this device AND on every
+  // freshness transition, so a device going stale immediately blanks its
+  // own derived values (and any TOTAL depending on them) to NAN.
+  void recompute_derived_(uint8_t device_index);
+  void recompute_totals_();
+  static float combine_total_(sensor::Sensor *a, sensor::Sensor *b);
 
   ESPTelemetry::Decoder decoder_;
   // Stage 32: every per-source field below is indexed [0]=inverter1(device_id
@@ -304,6 +338,7 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *active_fault_code_sensor_[kDeviceCount] = {nullptr, nullptr};
   sensor::Sensor *active_warning_code_sensor_[kDeviceCount] = {nullptr, nullptr};
   sensor::Sensor *load_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *max_backflow_power_sensor_[kDeviceCount] = {nullptr, nullptr};
 
   binary_sensor::BinarySensor *gateway_data_fresh_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *gateway_link_connected_sensor_[kDeviceCount] = {nullptr, nullptr};
@@ -312,8 +347,19 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   binary_sensor::BinarySensor *holding_cache_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *snapshot_values_valid_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *feed_in_grid_enabled_sensor_[kDeviceCount] = {nullptr, nullptr};
+  binary_sensor::BinarySensor *zero_export_enabled_sensor_[kDeviceCount] = {nullptr, nullptr};
 
   text_sensor::TextSensor *connection_status_text_sensor_[kDeviceCount] = {nullptr, nullptr};
+
+  // Stage 37: see set_solar_sensor et al. above.
+  sensor::Sensor *solar_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *derived_power_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *grid_net_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *battery_net_sensor_[kDeviceCount] = {nullptr, nullptr};
+  sensor::Sensor *solar_total_sensor_ = nullptr;
+  sensor::Sensor *power_total_sensor_ = nullptr;
+  sensor::Sensor *grid_total_sensor_ = nullptr;
+  sensor::Sensor *battery_total_sensor_ = nullptr;
 };
 
 }  // namespace display_protocol_uart

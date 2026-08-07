@@ -111,252 +111,196 @@ lvgl:
     label:
       bg_opa: transp
       text_color: 0xFFFFFF
-  # Stage 34: dedicated offline production page (Stage 33's HA-gateway
-  # attempt is superseded -- see header comment). Same monochrome
-  # two-column style as the Stage 32 validation page, trimmed to exactly
-  # the entities this stage publishes internally -- every label reads the
-  # SAME sensor object `display_protocol_uart` publishes (on_value
-  # triggers below), not a separate display-only value. There is no
-  # Home Assistant API on this board anymore; these sensors are purely
-  # internal to LVGL.
+  # Stage 37: HMI redesign per the attached mockup -- TOTAL/LPX1/LPX2
+  # numeric columns with a shared row-label column on the left. Every value
+  # label reads a `display_protocol_uart` sensor object (raw pass-through
+  # OR one of the Stage 37 derived sensors computed in
+  # DisplayProtocolUARTComponent::recompute_derived_ -- Solar/Power/
+  # Grid/Battery per inverter plus TOTAL), never a second display-only
+  # calculation. Unavailable/not-fresh values publish NAN, and every
+  # lambda below renders that as "--" instead of a misleading number.
+  # Layout is row-major: each row below is one full-width flex row with
+  # exactly 4 cells (label, TOTAL, LPX1, LPX2), so column alignment across
+  # rows falls out naturally from matching cell widths, not from
+  # coordinating N separate column stacks.
   widgets:
     - obj:
+        id: root_container
         width: 100%
         height: 100%
         bg_color: 0x000000
         border_width: 0
-        pad_all: 8
+        pad_all: 4
         scrollable: false
         layout:
           type: flex
-          flex_flow: row
-          flex_align_main: space_evenly
-          flex_align_cross: start
+          flex_flow: column
+          flex_align_main: start
+          flex_align_cross: stretch
         widgets:
+          - label:
+              text: "SWEET POWER"
+              text_font: montserrat_22
+              text_color: 0xFFFFFF
+              text_align: center
+              width: 100%
+              height: 28
+          # Header: blank label-column cell, then TOTAL/LPX1/LPX2. LPX1/LPX2
+          # are a single recolor-enabled label combining the inverter name
+          # and its connection status ("LPX1 On"/"LPX1 Off") -- name in
+          # white, status word in green/red -- updated only on an actual
+          # freshness transition (see inverter{1,2}_fresh below), not on
+          # every telemetry frame. No icon/image asset used.
           - obj:
-              width: 48%
-              height: size_content
+              width: 100%
+              height: 30
               border_width: 0
               pad_all: 0
               scrollable: false
-              layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
               widgets:
-                - label: {text: "INVERTER 1", text_font: montserrat_20, text_color: 0xFFFFFF, pad_bottom: 8}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "PV1 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_pv1_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "PV2 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_pv2_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Load Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_load_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Power From Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_power_from_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery Charge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_battery_charge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery Discharge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_battery_discharge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery SOC :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_battery_soc_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "EPS Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_eps_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Freshness :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv1_freshness_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - obj: {width: 150, height: 1, border_width: 0, pad_all: 0}
+                - label: {text: "TOTAL", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: header1_label, text: "LXP1 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
+                - label: {id: header2_label, text: "LXP2 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
+          # Solar = PV1+PV2 per inverter, TOTAL = both inverters combined.
+          # Same font size as Power/Grid/Battery (visual weight comes from
+          # color/position, not from being uniquely oversized).
           - obj:
-              width: 48%
-              height: size_content
+              width: 100%
+              height: 40
               border_width: 0
               pad_all: 0
               scrollable: false
-              layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
               widgets:
-                - label: {text: "INVERTER 2", text_font: montserrat_20, text_color: 0xFFFFFF, pad_bottom: 8}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "PV1 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_pv1_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "PV2 Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_pv2_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Load Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_load_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Power From Grid :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_power_from_grid_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery Charge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_battery_charge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery Discharge Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_battery_discharge_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Battery SOC :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_battery_soc_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "EPS Power :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_eps_power_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
-                - obj:
-                    width: 100%
-                    height: size_content
-                    border_width: 0
-                    pad_all: 0
-                    pad_bottom: 6
-                    scrollable: false
-                    layout: {type: flex, flex_flow: row, flex_align_main: space_between, flex_align_cross: center}
-                    widgets:
-                      - label: {text: "Freshness :", text_font: montserrat_14, text_color: 0xFFFFFF, pad_right: 8}
-                      - label: {id: inv2_freshness_label, text: "--", text_font: montserrat_16, text_color: 0xFFFFFF}
+                - label: {text: "Solar", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - label: {id: solar_total_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                - label: {id: solar_1_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                - label: {id: solar_2_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+          # PV1/PV2: smaller subordinate rows under Solar. No TOTAL value.
+          - obj:
+              width: 100%
+              height: 22
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "PV1", text_font: montserrat_14, text_color: 0xCCCCCC, width: 150, pad_left: 16}
+                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                - label: {id: pv1_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                - label: {id: pv1_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+          - obj:
+              width: 100%
+              height: 22
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "PV2", text_font: montserrat_14, text_color: 0xCCCCCC, width: 150, pad_left: 16}
+                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                - label: {id: pv2_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                - label: {id: pv2_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+          # Power = Load Power + EPS Power per inverter. Always red.
+          - obj:
+              width: 100%
+              height: 40
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "Power", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - label: {id: power_total_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
+                - label: {id: power_1_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
+                - label: {id: power_2_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
+          # Grid = Power To Grid - Power From Grid. Signed; green=export,
+          # red=import. Initial/zero/unavailable render white/neutral.
+          - obj:
+              width: 100%
+              height: 40
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "Grid", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - label: {id: grid_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: grid_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: grid_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+          # Battery = Battery Charge Power - Battery Discharge Power.
+          # Signed; green=charging, red=discharging.
+          - obj:
+              width: 100%
+              height: 40
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "Battery", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - label: {id: battery_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: battery_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: battery_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+          - obj:
+              width: 100%
+              height: 10
+              border_width: 0
+              pad_top: 4
+              pad_bottom: 4
+              scrollable: false
+              widgets:
+                - obj: {width: 100%, height: 2, bg_color: 0x444444, border_width: 0, pad_all: 0}
+          # SOC: per-inverter only, no TOTAL (percentages don't sum).
+          - obj:
+              width: 100%
+              height: 30
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "SOC", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                - label: {id: soc_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: soc_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+          # Export Limit (max_backflow_power): per-inverter only, no TOTAL.
+          - obj:
+              width: 100%
+              height: 30
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "Export Limit", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                - label: {id: export_limit_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFD600, text_align: center, flex_grow: 1}
+                - label: {id: export_limit_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFD600, text_align: center, flex_grow: 1}
+          # Export: user-facing inverse of zero_export_enabled (ON = export
+          # allowed). Per-inverter only, no TOTAL. Dynamic green/red.
+          - obj:
+              width: 100%
+              height: 30
+              border_width: 0
+              pad_all: 0
+              scrollable: false
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              widgets:
+                - label: {text: "Export", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
+                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                - label: {id: export_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - label: {id: export_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
 
-# Stage 34: exactly the 8 power entities + Freshness per inverter -- the
-# only entities declared here (see stages/Stage34.md). All other catalog
-# entities the component CAN publish are simply not declared, so they are
-# never instantiated (the component no-ops publishing to a null sensor
-# pointer). These sensors are purely internal state for LVGL's on_value
-# lambdas below -- there is no ESPHome API on this board to expose them
-# to, unlike the superseded Stage 33 attempt.
+# Stage 37: raw pass-through sensors needed either as a directly-displayed
+# row (PV1, PV2, SOC, Export Limit) or purely as a computation input for
+# recompute_derived_ (Load/EPS/PowerToGrid/PowerFromGrid/BatteryCharge/
+# BatteryDischarge -- no LVGL label reads these directly, only the derived
+# Power/Grid/Battery sensors below do), plus the Stage 37 derived sensors
+# themselves (per-inverter and TOTAL). Same "only declare what's used"
+# convention as Stage 34/35 -- see stages/Stage34.md.
 
 sensor:
   - platform: display_protocol_uart
@@ -368,11 +312,15 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_pv1_power_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(pv1_1_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_pv1_power_label), text);
-                lv_obj_send_event(id(inv1_pv1_power_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(pv1_1_label), text);
+                lv_obj_send_event(id(pv1_1_label), lvgl::lv_update_event, nullptr);
               }
     inverter1_pv2_power:
       name: "Inverter 1 PV2 Power"
@@ -381,64 +329,34 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_pv2_power_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(pv2_1_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_pv2_power_label), text);
-                lv_obj_send_event(id(inv1_pv2_power_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(pv2_1_label), text);
+                lv_obj_send_event(id(pv2_1_label), lvgl::lv_update_event, nullptr);
               }
     inverter1_load_power:
       name: "Inverter 1 Load Power"
       id: inverter1_load_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_load_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_load_power_label), text);
-                lv_obj_send_event(id(inv1_load_power_label), lvgl::lv_update_event, nullptr);
-              }
+    inverter1_eps_power:
+      name: "Inverter 1 EPS Power"
+      id: inverter1_eps_power
+    inverter1_power_to_grid:
+      name: "Inverter 1 Power To Grid"
+      id: inverter1_power_to_grid
     inverter1_power_from_grid:
       name: "Inverter 1 Power From Grid"
       id: inverter1_power_from_grid
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_power_from_grid_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_power_from_grid_label), text);
-                lv_obj_send_event(id(inv1_power_from_grid_label), lvgl::lv_update_event, nullptr);
-              }
     inverter1_battery_charge_power:
       name: "Inverter 1 Battery Charge Power"
       id: inverter1_battery_charge_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_battery_charge_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_battery_charge_power_label), text);
-                lv_obj_send_event(id(inv1_battery_charge_power_label), lvgl::lv_update_event, nullptr);
-              }
     inverter1_battery_discharge_power:
       name: "Inverter 1 Battery Discharge Power"
       id: inverter1_battery_discharge_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_battery_discharge_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_battery_discharge_power_label), text);
-                lv_obj_send_event(id(inv1_battery_discharge_power_label), lvgl::lv_update_event, nullptr);
-              }
     inverter1_battery_soc:
       name: "Inverter 1 Battery SOC"
       id: inverter1_battery_soc
@@ -446,37 +364,116 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.1f %%", x);
-              const char *current = lv_label_get_text(id(inv1_battery_soc_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_battery_soc_label), text);
-                lv_obj_send_event(id(inv1_battery_soc_label), lvgl::lv_update_event, nullptr);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f%%", x);
               }
-    inverter1_eps_power:
-      name: "Inverter 1 EPS Power"
-      id: inverter1_eps_power
+              const char *current = lv_label_get_text(id(soc_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(soc_1_label), text);
+                lv_obj_send_event(id(soc_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_max_backflow_power:
+      name: "Inverter 1 Max Backflow Power"
+      id: inverter1_max_backflow_power
       on_value:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv1_eps_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_eps_power_label), text);
-                lv_obj_send_event(id(inv1_eps_power_label), lvgl::lv_update_event, nullptr);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f%%", x);
               }
-    inverter1_gateway_snapshot_age:
-      name: "Inverter 1 Freshness"
-      id: inverter1_freshness
+              const char *current = lv_label_get_text(id(export_limit_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_limit_1_label), text);
+                lv_obj_send_event(id(export_limit_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_solar:
+      name: "Inverter 1 Solar"
+      id: inverter1_solar
       on_value:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.1f s", x / 1000.0);
-              const char *current = lv_label_get_text(id(inv1_freshness_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(solar_1_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv1_freshness_label), text);
-                lv_obj_send_event(id(inv1_freshness_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(solar_1_label), text);
+                lv_obj_send_event(id(solar_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_derived_power:
+      name: "Inverter 1 Derived Power"
+      id: inverter1_derived_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(power_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(power_1_label), text);
+                lv_obj_send_event(id(power_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_grid_net:
+      name: "Inverter 1 Grid"
+      id: inverter1_grid_net
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(grid_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_1_label), text);
+                lv_obj_set_style_text_color(id(grid_1_label), color, 0);
+                lv_obj_send_event(id(grid_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_battery_net:
+      name: "Inverter 1 Battery Net"
+      id: inverter1_battery_net
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(battery_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(battery_1_label), text);
+                lv_obj_set_style_text_color(id(battery_1_label), color, 0);
+                lv_obj_send_event(id(battery_1_label), lvgl::lv_update_event, nullptr);
               }
     inverter2_pv1_power:
       name: "Inverter 2 PV1 Power"
@@ -485,11 +482,15 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_pv1_power_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(pv1_2_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_pv1_power_label), text);
-                lv_obj_send_event(id(inv2_pv1_power_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(pv1_2_label), text);
+                lv_obj_send_event(id(pv1_2_label), lvgl::lv_update_event, nullptr);
               }
     inverter2_pv2_power:
       name: "Inverter 2 PV2 Power"
@@ -498,64 +499,34 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_pv2_power_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(pv2_2_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_pv2_power_label), text);
-                lv_obj_send_event(id(inv2_pv2_power_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(pv2_2_label), text);
+                lv_obj_send_event(id(pv2_2_label), lvgl::lv_update_event, nullptr);
               }
     inverter2_load_power:
       name: "Inverter 2 Load Power"
       id: inverter2_load_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_load_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_load_power_label), text);
-                lv_obj_send_event(id(inv2_load_power_label), lvgl::lv_update_event, nullptr);
-              }
+    inverter2_eps_power:
+      name: "Inverter 2 EPS Power"
+      id: inverter2_eps_power
+    inverter2_power_to_grid:
+      name: "Inverter 2 Power To Grid"
+      id: inverter2_power_to_grid
     inverter2_power_from_grid:
       name: "Inverter 2 Power From Grid"
       id: inverter2_power_from_grid
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_power_from_grid_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_power_from_grid_label), text);
-                lv_obj_send_event(id(inv2_power_from_grid_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_battery_charge_power:
       name: "Inverter 2 Battery Charge Power"
       id: inverter2_battery_charge_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_battery_charge_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_battery_charge_power_label), text);
-                lv_obj_send_event(id(inv2_battery_charge_power_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_battery_discharge_power:
       name: "Inverter 2 Battery Discharge Power"
       id: inverter2_battery_discharge_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_battery_discharge_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_battery_discharge_power_label), text);
-                lv_obj_send_event(id(inv2_battery_discharge_power_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_battery_soc:
       name: "Inverter 2 Battery SOC"
       id: inverter2_battery_soc
@@ -563,37 +534,200 @@ sensor:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.1f %%", x);
-              const char *current = lv_label_get_text(id(inv2_battery_soc_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_battery_soc_label), text);
-                lv_obj_send_event(id(inv2_battery_soc_label), lvgl::lv_update_event, nullptr);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f%%", x);
               }
-    inverter2_eps_power:
-      name: "Inverter 2 EPS Power"
-      id: inverter2_eps_power
+              const char *current = lv_label_get_text(id(soc_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(soc_2_label), text);
+                lv_obj_send_event(id(soc_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_max_backflow_power:
+      name: "Inverter 2 Max Backflow Power"
+      id: inverter2_max_backflow_power
       on_value:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.0f W", x);
-              const char *current = lv_label_get_text(id(inv2_eps_power_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_eps_power_label), text);
-                lv_obj_send_event(id(inv2_eps_power_label), lvgl::lv_update_event, nullptr);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f%%", x);
               }
-    inverter2_gateway_snapshot_age:
-      name: "Inverter 2 Freshness"
-      id: inverter2_freshness
+              const char *current = lv_label_get_text(id(export_limit_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_limit_2_label), text);
+                lv_obj_send_event(id(export_limit_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_solar:
+      name: "Inverter 2 Solar"
+      id: inverter2_solar
       on_value:
         then:
           - lambda: |-
               char text[24];
-              snprintf(text, sizeof(text), "%.1f s", x / 1000.0);
-              const char *current = lv_label_get_text(id(inv2_freshness_label));
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(solar_2_label));
               if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(inv2_freshness_label), text);
-                lv_obj_send_event(id(inv2_freshness_label), lvgl::lv_update_event, nullptr);
+                lv_label_set_text(id(solar_2_label), text);
+                lv_obj_send_event(id(solar_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_derived_power:
+      name: "Inverter 2 Derived Power"
+      id: inverter2_derived_power
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(power_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(power_2_label), text);
+                lv_obj_send_event(id(power_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_grid_net:
+      name: "Inverter 2 Grid"
+      id: inverter2_grid_net
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(grid_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_2_label), text);
+                lv_obj_set_style_text_color(id(grid_2_label), color, 0);
+                lv_obj_send_event(id(grid_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_battery_net:
+      name: "Inverter 2 Battery Net"
+      id: inverter2_battery_net
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(battery_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(battery_2_label), text);
+                lv_obj_set_style_text_color(id(battery_2_label), color, 0);
+                lv_obj_send_event(id(battery_2_label), lvgl::lv_update_event, nullptr);
+              }
+    solar_total:
+      name: "Total Solar"
+      id: solar_total_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(solar_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(solar_total_label), text);
+                lv_obj_send_event(id(solar_total_label), lvgl::lv_update_event, nullptr);
+              }
+    power_total:
+      name: "Total Power"
+      id: power_total_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.0f W", x);
+              }
+              const char *current = lv_label_get_text(id(power_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(power_total_label), text);
+                lv_obj_send_event(id(power_total_label), lvgl::lv_update_event, nullptr);
+              }
+    grid_total:
+      name: "Total Grid"
+      id: grid_total_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(grid_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_total_label), text);
+                lv_obj_set_style_text_color(id(grid_total_label), color, 0);
+                lv_obj_send_event(id(grid_total_label), lvgl::lv_update_event, nullptr);
+              }
+    battery_total:
+      name: "Total Battery"
+      id: battery_total_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "+%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(battery_total_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(battery_total_label), text);
+                lv_obj_set_style_text_color(id(battery_total_label), color, 0);
+                lv_obj_send_event(id(battery_total_label), lvgl::lv_update_event, nullptr);
               }
 
 binary_sensor:
@@ -602,16 +736,128 @@ binary_sensor:
     inverter1_gateway_data_fresh:
       name: "Inverter 1 Fresh"
       id: inverter1_fresh
+      # Without this, ESPHome's on_state trigger never fires on the very
+      # first publish_state() call (codegen default is False unless set
+      # here) -- see the identical Stage 35 fix for zero_export below.
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              // Header: "LXP1 On"/"LXP1 Off", name in the label's default
+              // color (white), status word recolored inline via LVGL's
+              // "#RRGGBB text#" recolor markup (recolor: true on this
+              // label -- see the header widget above).
+              char header_text[32];
+              snprintf(header_text, sizeof(header_text), x ? "LXP1 #00E676 On#" : "LXP1 #FF3B30 Off#");
+              const char *header_current = lv_label_get_text(id(header1_label));
+              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                lv_label_set_text(id(header1_label), header_text);
+                lv_obj_send_event(id(header1_label), lvgl::lv_update_event, nullptr);
+              }
+              // Export is a binary_sensor pair (no NAN to lean on), so its
+              // staleness gating is re-evaluated here directly rather than
+              // through recompute_derived_.
+              char text[8];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              bool trusted = x && id(inverter1_zero_export_enabled).has_state();
+              if (!trusted) {
+                snprintf(text, sizeof(text), "--");
+              } else if (id(inverter1_zero_export_enabled).state) {
+                snprintf(text, sizeof(text), "On");
+                color = lv_color_hex(0x00E676);
+              } else {
+                snprintf(text, sizeof(text), "Off");
+                color = lv_color_hex(0xFF3B30);
+              }
+              const char *current = lv_label_get_text(id(export_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_1_label), text);
+                lv_obj_set_style_text_color(id(export_1_label), color, 0);
+                lv_obj_send_event(id(export_1_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter1_zero_export_enabled:
+      name: "Inverter 1 Zero Export"
+      id: inverter1_zero_export_enabled
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              // Stage 37 field correction: live verification against the
+              // physical inverters showed this Export indicator must track
+              // zero_export_enabled directly (On when the register is set,
+              // Off when clear) -- not the originally-assumed inverse.
+              char text[8];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              bool trusted = id(inverter1_fresh).has_state() && id(inverter1_fresh).state;
+              if (!trusted) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x) {
+                snprintf(text, sizeof(text), "On");
+                color = lv_color_hex(0x00E676);
+              } else {
+                snprintf(text, sizeof(text), "Off");
+                color = lv_color_hex(0xFF3B30);
+              }
+              const char *current = lv_label_get_text(id(export_1_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_1_label), text);
+                lv_obj_set_style_text_color(id(export_1_label), color, 0);
+                lv_obj_send_event(id(export_1_label), lvgl::lv_update_event, nullptr);
+              }
     inverter2_gateway_data_fresh:
       name: "Inverter 2 Fresh"
       id: inverter2_fresh
-
-text_sensor:
-  - platform: display_protocol_uart
-    display_protocol_uart_id: gateway_receiver
-    inverter1_connection_status:
-      name: "Inverter 1 Connection Status"
-      id: inverter1_connection_status
-    inverter2_connection_status:
-      name: "Inverter 2 Connection Status"
-      id: inverter2_connection_status
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              char header_text[32];
+              snprintf(header_text, sizeof(header_text), x ? "LXP2 #00E676 On#" : "LXP2 #FF3B30 Off#");
+              const char *header_current = lv_label_get_text(id(header2_label));
+              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                lv_label_set_text(id(header2_label), header_text);
+                lv_obj_send_event(id(header2_label), lvgl::lv_update_event, nullptr);
+              }
+              char text[8];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              bool trusted = x && id(inverter2_zero_export_enabled).has_state();
+              if (!trusted) {
+                snprintf(text, sizeof(text), "--");
+              } else if (id(inverter2_zero_export_enabled).state) {
+                snprintf(text, sizeof(text), "On");
+                color = lv_color_hex(0x00E676);
+              } else {
+                snprintf(text, sizeof(text), "Off");
+                color = lv_color_hex(0xFF3B30);
+              }
+              const char *current = lv_label_get_text(id(export_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_2_label), text);
+                lv_obj_set_style_text_color(id(export_2_label), color, 0);
+                lv_obj_send_event(id(export_2_label), lvgl::lv_update_event, nullptr);
+              }
+    inverter2_zero_export_enabled:
+      name: "Inverter 2 Zero Export"
+      id: inverter2_zero_export_enabled
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              char text[8];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              bool trusted = id(inverter2_fresh).has_state() && id(inverter2_fresh).state;
+              if (!trusted) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x) {
+                snprintf(text, sizeof(text), "On");
+                color = lv_color_hex(0x00E676);
+              } else {
+                snprintf(text, sizeof(text), "Off");
+                color = lv_color_hex(0xFF3B30);
+              }
+              const char *current = lv_label_get_text(id(export_2_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(export_2_label), text);
+                lv_obj_set_style_text_color(id(export_2_label), color, 0);
+                lv_obj_send_event(id(export_2_label), lvgl::lv_update_event, nullptr);
+              }

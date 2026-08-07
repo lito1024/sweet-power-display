@@ -25,6 +25,8 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {2003, "battery_discharge_power", "Battery Discharge Power", "W", 0, "FAST"},
   {5001, "pv1_energy_total", "PV1 Energy Total", "kWh", 3, "SLOW"},
   {7001, "feed_in_grid_enabled", "Feed-In Grid Enabled", "", 0, "NORMAL"},
+  {7002, "max_backflow_power", "Max Backflow Power", "%", 0, "NORMAL"},
+  {7003, "zero_export_enabled", "Zero Export", "", 0, "NORMAL"},
   {9001, "battery_capacity", "Battery Capacity", "Ah", 0, "SLOW"},
   {9002, "bms_max_cell_temperature", "BMS Max Cell Temperature", "deg C", 1, "NORMAL"},
   {9003, "power_to_grid", "Power To Grid", "W", 0, "FAST"},

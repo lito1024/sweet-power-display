@@ -1,5 +1,7 @@
 #include "display_protocol_uart.h"
 
+#include <cmath>
+
 #include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
@@ -209,6 +211,7 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
   this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], this->data_fresh_[device_index]);
   this->publish_binary_(this->gateway_link_connected_sensor_[device_index], this->link_connected_[device_index]);
   this->trace_frame_(frame);
+  this->recompute_derived_(device_index);
 }
 
 void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint32_t now) {
@@ -246,6 +249,7 @@ void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint3
                                          ESPTelemetry::SnapshotFlagHoldingCacheValid)) != 0);
   this->publish_binary_(this->feed_in_grid_enabled_sensor_[device_index],
                         (latest.flags & ESPTelemetry::SnapshotFlagFeedInEnabled) != 0);
+  this->recompute_derived_(device_index);
 }
 
 void DisplayProtocolUARTComponent::publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now) {
@@ -286,6 +290,18 @@ void DisplayProtocolUARTComponent::publish_telemetry_field_(uint8_t device_index
       else
         latest.flags &= static_cast<uint16_t>(~ESPTelemetry::SnapshotFlagFeedInEnabled);
       this->publish_binary_(this->feed_in_grid_enabled_sensor_[device_index], value != 0);
+      return;
+    // Stage 35: experimentally confirmed via live diagnostic-mode discovery
+    // on Inverter #2 -- see stages/Stage35.md. Read-only, same one-shot
+    // publish-on-arrival pattern as the other Stage 30 fields below (no
+    // legacy SnapshotFlag bookkeeping needed, unlike FeedInGridEnabled
+    // above, since neither field is part of the legacy 6-field
+    // SnapshotPayload).
+    case ESPTelemetry::FieldIdMaxBackflowPower:
+      this->publish_float_(this->max_backflow_power_sensor_[device_index], static_cast<float>(value));
+      return;
+    case ESPTelemetry::FieldIdZeroExportEnabled:
+      this->publish_binary_(this->zero_export_enabled_sensor_[device_index], value != 0);
       return;
     case ESPTelemetry::FieldIdBatteryCapacity:
       this->publish_float_(this->battery_capacity_sensor_[device_index], static_cast<float>(value));
@@ -581,9 +597,22 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
     this->update_connection_status_(device_index);
     if (!fresh) {
       ESP_LOGW(TAG, "UART DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
+      // Stage 37: a stale device's readings can no longer be trusted --
+      // republish NAN (never a frozen last value, never 0) for every
+      // directly-displayed raw value, then recompute_derived_ below
+      // NAN's out Solar/Power/Grid/Battery (and any TOTAL depending on
+      // this device) the same way. Reconnection self-heals: the next real
+      // field update from this device overwrites NAN via the normal
+      // publish_telemetry_field_/publish_snapshot_ paths, no extra code
+      // needed for the un-blank direction.
+      this->publish_float_(this->pv1_power_sensor_[device_index], NAN);
+      this->publish_float_(this->pv2_power_sensor_[device_index], NAN);
+      this->publish_float_(this->battery_soc_sensor_[device_index], NAN);
+      this->publish_float_(this->max_backflow_power_sensor_[device_index], NAN);
     } else {
       ESP_LOGI(TAG, "UART LINK RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
     }
+    this->recompute_derived_(device_index);
   }
 }
 
@@ -626,6 +655,46 @@ void DisplayProtocolUARTComponent::publish_text_(text_sensor::TextSensor *sensor
     return;
   }
   sensor->publish_state(value);
+}
+
+void DisplayProtocolUARTComponent::recompute_derived_(uint8_t device_index) {
+  const bool fresh = this->data_fresh_[device_index];
+
+  sensor::Sensor *pv1 = this->pv1_power_sensor_[device_index];
+  sensor::Sensor *pv2 = this->pv2_power_sensor_[device_index];
+  const bool solar_ok = fresh && pv1 != nullptr && pv1->has_state() && pv2 != nullptr && pv2->has_state();
+  this->publish_float_(this->solar_sensor_[device_index], solar_ok ? (pv1->state + pv2->state) : NAN);
+
+  sensor::Sensor *load = this->load_power_sensor_[device_index];
+  sensor::Sensor *eps = this->eps_power_sensor_[device_index];
+  const bool power_ok = fresh && load != nullptr && load->has_state() && eps != nullptr && eps->has_state();
+  this->publish_float_(this->derived_power_sensor_[device_index], power_ok ? (load->state + eps->state) : NAN);
+
+  sensor::Sensor *to_grid = this->power_to_grid_sensor_[device_index];
+  sensor::Sensor *from_grid = this->power_from_grid_sensor_[device_index];
+  const bool grid_ok = fresh && to_grid != nullptr && to_grid->has_state() && from_grid != nullptr && from_grid->has_state();
+  this->publish_float_(this->grid_net_sensor_[device_index], grid_ok ? (to_grid->state - from_grid->state) : NAN);
+
+  sensor::Sensor *charge = this->battery_charge_power_sensor_[device_index];
+  sensor::Sensor *discharge = this->battery_discharge_power_sensor_[device_index];
+  const bool battery_ok = fresh && charge != nullptr && charge->has_state() && discharge != nullptr && discharge->has_state();
+  this->publish_float_(this->battery_net_sensor_[device_index], battery_ok ? (charge->state - discharge->state) : NAN);
+
+  this->recompute_totals_();
+}
+
+void DisplayProtocolUARTComponent::recompute_totals_() {
+  this->publish_float_(this->solar_total_sensor_, combine_total_(this->solar_sensor_[0], this->solar_sensor_[1]));
+  this->publish_float_(this->power_total_sensor_, combine_total_(this->derived_power_sensor_[0], this->derived_power_sensor_[1]));
+  this->publish_float_(this->grid_total_sensor_, combine_total_(this->grid_net_sensor_[0], this->grid_net_sensor_[1]));
+  this->publish_float_(this->battery_total_sensor_, combine_total_(this->battery_net_sensor_[0], this->battery_net_sensor_[1]));
+}
+
+float DisplayProtocolUARTComponent::combine_total_(sensor::Sensor *a, sensor::Sensor *b) {
+  // Never treat a missing/untrusted inverter as zero -- see set_solar_total_sensor.
+  if (a == nullptr || b == nullptr || !a->has_state() || !b->has_state()) return NAN;
+  if (std::isnan(a->state) || std::isnan(b->state)) return NAN;
+  return a->state + b->state;
 }
 
 void DisplayProtocolUARTComponent::trace_frame_(const ESPTelemetry::Frame &frame) {
