@@ -190,6 +190,17 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now);
   void publish_diagnostics_(uint32_t now);
   void update_stale_state_(uint32_t now);
+  // Stage 38: source-freshness now comes from the Gateway's own
+  // per-frame SnapshotFlagInputCacheValid/HoldingCacheValid /
+  // TelemetryGroupFlagCacheValid signal (see handle_snapshot_frame_/
+  // handle_telemetry_frame_), not merely "a frame arrived" --
+  // update_stale_state_ above remains the fallback for "no frame at all
+  // within stale_timeout_ms_" (the transport-link-dead case). Both paths
+  // funnel through set_device_freshness_ so the NAN-blanking/logging on a
+  // fresh->stale transition happens exactly once, regardless of which
+  // path detected it. See stages/Stage38.md.
+  void set_device_freshness_(uint8_t device_index, bool fresh);
+  void mark_device_stale_(uint8_t device_index);
   void publish_binary_(binary_sensor::BinarySensor *sensor, bool value);
   void publish_float_(sensor::Sensor *sensor, float value);
   void publish_text_(text_sensor::TextSensor *sensor, const char *value);

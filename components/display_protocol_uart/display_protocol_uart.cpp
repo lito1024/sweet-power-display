@@ -137,17 +137,28 @@ void DisplayProtocolUARTComponent::handle_snapshot_frame_(const ESPTelemetry::Fr
   this->have_snapshot_[device_index] = true;
   this->last_frame_ms_[device_index] = now;
 
+  // Stage 38: this frame's own flags say whether the Gateway that sent it
+  // currently considers its LuxPower source valid -- a Gateway that is
+  // alive but has lost its source keeps sending frames (the transport
+  // link stays up), so "a frame arrived" is deliberately NOT treated as
+  // "the data in it is fresh". Both bits are required (input AND holding
+  // block), matching the Gateway's own combined computation.
+  const bool source_fresh =
+      (payload.flags & (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid)) ==
+      (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid);
+  const bool was_fresh = this->data_fresh_[device_index];
+
   if (!this->link_connected_[device_index]) {
     ESP_LOGI(TAG, "UART LINK ESTABLISHED device_id=%u", static_cast<unsigned int>(device_index + 1));
     ESP_LOGI(TAG,
              "sequence: %u frame size: %u",
              static_cast<unsigned int>(frame.sequence),
              static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
-  } else if (!this->data_fresh_[device_index]) {
-    ESP_LOGI(TAG, "UART LINK RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
+  } else if (source_fresh && !was_fresh) {
+    ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
-  this->data_fresh_[device_index] = true;
+  this->set_device_freshness_(static_cast<uint8_t>(device_index), source_fresh);
   this->update_connection_status_(static_cast<uint8_t>(device_index));
 
   this->trace_frame_(frame);
@@ -193,22 +204,33 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
     this->publish_telemetry_field_(device_index, payload.fields[i].fieldId, payload.fields[i].value, now);
   }
 
+  // Stage 38: same "trust the Gateway's own source-validity signal, not
+  // frame arrival" rule as handle_snapshot_frame_ -- but a single V2
+  // frame only ever carries one group's bit (Status -> holding,
+  // everything else -> input; see the accumulator update above), so this
+  // checks the running latest-known state of BOTH bits, not just this
+  // one frame's bit.
+  const bool source_fresh =
+      (this->latest_[device_index].flags &
+       (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid)) ==
+      (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid);
+  const bool was_fresh = this->data_fresh_[device_index];
+
   if (!this->link_connected_[device_index]) {
     ESP_LOGI(TAG, "UART LINK ESTABLISHED device_id=%u", static_cast<unsigned int>(device_index + 1));
     ESP_LOGI(TAG,
              "sequence: %u frame size: %u",
              static_cast<unsigned int>(frame.sequence),
              static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
-  } else if (!this->data_fresh_[device_index]) {
-    ESP_LOGI(TAG, "UART LINK RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
+  } else if (source_fresh && !was_fresh) {
+    ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
-  this->data_fresh_[device_index] = true;
+  this->set_device_freshness_(device_index, source_fresh);
   this->update_connection_status_(device_index);
 
   this->publish_float_(this->gateway_snapshot_age_sensor_[device_index], static_cast<float>(now - this->last_frame_ms_[device_index]));
   this->publish_float_(this->gateway_sequence_sensor_[device_index], static_cast<float>(this->last_sequence_[device_index]));
-  this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], this->data_fresh_[device_index]);
   this->publish_binary_(this->gateway_link_connected_sensor_[device_index], this->link_connected_[device_index]);
   this->trace_frame_(frame);
   this->recompute_derived_(device_index);
@@ -582,38 +604,57 @@ void DisplayProtocolUARTComponent::publish_diagnostics_(uint32_t now) {
 void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   // Stage 32: independent per device -- powering one Gateway off/on must
   // never affect the other's freshness state.
+  //
+  // Stage 38: this is now purely the TRANSPORT-link fallback -- "no frame
+  // of any kind arrived within stale_timeout_ms_" (Gateway/Bridge/ESP-NOW
+  // itself is unreachable). It can only ever detect GOING stale, never
+  // recovery: recovery always means a frame arrived, which is handled by
+  // set_device_freshness_ from inside handle_snapshot_frame_/
+  // handle_telemetry_frame_ directly. A Gateway that is alive but has
+  // lost its own LuxPower source keeps sending frames on schedule, so
+  // this loop correctly does nothing in that case -- see
+  // handle_snapshot_frame_/handle_telemetry_frame_ for that path.
   for (uint8_t device_index = 0; device_index < kDeviceCount; ++device_index) {
     if (!this->have_snapshot_[device_index]) {
       continue;
     }
-
-    const bool fresh = (now - this->last_frame_ms_[device_index]) <= this->stale_timeout_ms_;
-    if (fresh == this->data_fresh_[device_index]) {
+    if (!this->data_fresh_[device_index]) {
+      continue;  // already stale (transport or source), nothing to transition
+    }
+    const bool link_alive = (now - this->last_frame_ms_[device_index]) <= this->stale_timeout_ms_;
+    if (link_alive) {
       continue;
     }
-
-    this->data_fresh_[device_index] = fresh;
-    this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], fresh);
+    this->set_device_freshness_(device_index, false);
     this->update_connection_status_(device_index);
-    if (!fresh) {
-      ESP_LOGW(TAG, "UART DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
-      // Stage 37: a stale device's readings can no longer be trusted --
-      // republish NAN (never a frozen last value, never 0) for every
-      // directly-displayed raw value, then recompute_derived_ below
-      // NAN's out Solar/Power/Grid/Battery (and any TOTAL depending on
-      // this device) the same way. Reconnection self-heals: the next real
-      // field update from this device overwrites NAN via the normal
-      // publish_telemetry_field_/publish_snapshot_ paths, no extra code
-      // needed for the un-blank direction.
-      this->publish_float_(this->pv1_power_sensor_[device_index], NAN);
-      this->publish_float_(this->pv2_power_sensor_[device_index], NAN);
-      this->publish_float_(this->battery_soc_sensor_[device_index], NAN);
-      this->publish_float_(this->max_backflow_power_sensor_[device_index], NAN);
-    } else {
-      ESP_LOGI(TAG, "UART LINK RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
-    }
-    this->recompute_derived_(device_index);
   }
+}
+
+void DisplayProtocolUARTComponent::set_device_freshness_(uint8_t device_index, bool fresh) {
+  const bool was_fresh = this->data_fresh_[device_index];
+  this->data_fresh_[device_index] = fresh;
+  this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], fresh);
+  if (!fresh && was_fresh) {
+    this->mark_device_stale_(device_index);
+  }
+}
+
+void DisplayProtocolUARTComponent::mark_device_stale_(uint8_t device_index) {
+  ESP_LOGW(TAG, "DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
+  // Stage 37/38: a stale device's readings -- whether the transport link
+  // itself died or the Gateway is alive but its LuxPower source isn't --
+  // can no longer be trusted. Republish NAN (never a frozen last value,
+  // never 0) for every directly-displayed raw value; recompute_derived_
+  // below NAN's out Solar/Power/Grid/Battery (and any TOTAL depending on
+  // this device) the same way. Reconnection self-heals: the next frame
+  // whose own flags report the source fresh again overwrites NAN via the
+  // normal publish_telemetry_field_/publish_snapshot_ paths, no extra
+  // code needed for the un-blank direction.
+  this->publish_float_(this->pv1_power_sensor_[device_index], NAN);
+  this->publish_float_(this->pv2_power_sensor_[device_index], NAN);
+  this->publish_float_(this->battery_soc_sensor_[device_index], NAN);
+  this->publish_float_(this->max_backflow_power_sensor_[device_index], NAN);
+  this->recompute_derived_(device_index);
 }
 
 void DisplayProtocolUARTComponent::update_connection_status_(uint8_t device_index) {
