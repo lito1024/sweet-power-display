@@ -17,6 +17,7 @@ CONF_FEED_IN_GRID_ENABLED = "feed_in_grid_enabled"
 # register 21 bit 15) -- see stages/Stage35.md. Read-only, not the same
 # register as feed_in_grid_enabled above (which failed the same test).
 CONF_ZERO_EXPORT_ENABLED = "zero_export_enabled"
+CONF_DISPLAY_ENABLED = "display_enabled"
 
 BINARY_SENSOR_MAP = {
     CONF_GATEWAY_DATA_FRESH: ("set_gateway_data_fresh_sensor", DEVICE_CLASS_CONNECTIVITY),
@@ -27,6 +28,10 @@ BINARY_SENSOR_MAP = {
     CONF_SNAPSHOT_VALUES_VALID: ("set_snapshot_values_valid_sensor", None),
     CONF_FEED_IN_GRID_ENABLED: ("set_feed_in_grid_enabled_sensor", None),
     CONF_ZERO_EXPORT_ENABLED: ("set_zero_export_enabled_sensor", None),
+}
+
+SYSTEM_BINARY_SENSOR_MAP = {
+    CONF_DISPLAY_ENABLED: ("set_display_enabled_sensor", None),
 }
 
 
@@ -53,6 +58,10 @@ CONFIG_SCHEMA = cv.Schema(
     {
         cv.GenerateID(CONF_DISPLAY_PROTOCOL_UART_ID): cv.use_id(DisplayProtocolUARTComponent),
         **{
+            cv.Optional(key): receiver_binary_sensor_schema(device_class)
+            for key, (_, device_class) in SYSTEM_BINARY_SENSOR_MAP.items()
+        },
+        **{
             cv.Optional(_per_device_key(prefix, key)): receiver_binary_sensor_schema(device_class)
             for key, (_, device_class) in BINARY_SENSOR_MAP.items()
             for _device_index, prefix in DEVICE_PROFILES
@@ -63,6 +72,11 @@ CONFIG_SCHEMA = cv.Schema(
 
 async def to_code(config):
     parent = await cg.get_variable(config[CONF_DISPLAY_PROTOCOL_UART_ID])
+
+    for key, (setter, _device_class) in SYSTEM_BINARY_SENSOR_MAP.items():
+        if key in config:
+            sens = await binary_sensor.new_binary_sensor(config[key])
+            cg.add(getattr(parent, setter)(sens))
 
     for key, (setter, _device_class) in BINARY_SENSOR_MAP.items():
         for device_index, prefix in DEVICE_PROFILES:

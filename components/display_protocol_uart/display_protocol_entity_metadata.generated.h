@@ -112,6 +112,21 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {9083, "active_fault_code", "Active Fault Code", "", 0, "NORMAL"},
   {9084, "active_warning_code", "Active Warning Code", "", 0, "NORMAL"},
   {9085, "load_power", "Load Power", "W", 0, "FAST"},
+  {10001, "system_output_voltage", "System Output Voltage", "V", 1, "FAST"},
+  {10002, "system_output_current", "System Output Current", "A", 1, "FAST"},
+  {10003, "system_output_power", "System Output Power", "W", 0, "FAST"},
+  {10004, "system_output_energy", "System Output Energy", "kWh", 2, "SLOW"},
+  {10005, "system_output_frequency", "System Output Frequency", "Hz", 1, "FAST"},
+  {10006, "system_output_power_factor", "System Output Power Factor", "", 2, "FAST"},
+  {10007, "grid_input_voltage", "Grid Input Voltage", "V", 1, "FAST"},
+  {10008, "grid_input_current", "Grid Input Current", "A", 1, "FAST"},
+  {10009, "grid_input_power", "Grid Input Power", "W", 0, "FAST"},
+  {10010, "grid_input_energy", "Grid Input Energy", "kWh", 2, "SLOW"},
+  {10011, "grid_input_frequency", "Grid Input Frequency", "Hz", 1, "FAST"},
+  {10012, "grid_input_power_factor", "Grid Input Power Factor", "", 2, "FAST"},
+  {10013, "grid_raw_voltage", "Grid Raw Voltage", "V", 1, "FAST"},
+  {10014, "display_enabled", "Display Enabled", "", 0, "FAST"},
+  {11001, "garage_presence", "Garage Presence", "", 0, "FAST"},
 };
 
 }  // namespace display_protocol_uart

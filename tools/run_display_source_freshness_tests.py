@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-side mirror of Stage 38's source-freshness gating in
+"""Host-side mirror of source-freshness diagnostics and display blanking in
 DisplayProtocolUARTComponent.
 
 Mirrors handle_snapshot_frame_/handle_telemetry_frame_/update_stale_state_/
@@ -11,8 +11,9 @@ comes from each frame's own SnapshotFlagInputCacheValid/
 HoldingCacheValid / TelemetryGroupFlagCacheValid bits (already correctly
 age-gated by the Gateway -- see luxpower-gateway/tools/
 run_gateway_source_freshness_tests.py), not from arrival timing alone.
-update_stale_state_'s arrival-timeout remains the fallback for "no frame
-of any kind" (transport link genuinely dead).
+The offline HMI preserves the last valid readings during short source/cache
+gaps and only blanks values when update_stale_state_'s arrival-timeout sees
+"no frame of any kind" (transport link genuinely dead).
 
 This is a model for fast host testing, not a binding to the real
 firmware -- keep it in sync with the C++ by hand when that logic
@@ -33,16 +34,20 @@ class DeviceFreshnessSim:
         self.last_frame_ms: int | None = None
         self.input_source_fresh = False
         self.holding_source_fresh = False
-        self.stale_transitions = 0  # counts mark_device_stale_ calls
+        self.stale_transitions = 0  # counts visible mark_device_stale_ blanking calls
         self.restored_transitions = 0
+        self.values_marked_stale = False
 
     def _set_device_freshness(self, fresh: bool) -> None:
         was_fresh = self.data_fresh
         self.data_fresh = fresh
-        if not fresh and was_fresh:
-            self.stale_transitions += 1
         if fresh and not was_fresh:
             self.restored_transitions += 1
+
+    def _mark_values_stale(self) -> None:
+        if not self.values_marked_stale:
+            self.values_marked_stale = True
+            self.stale_transitions += 1
 
     def receive_v1_frame(self, now_ms: int, input_cache_valid: bool, holding_cache_valid: bool) -> None:
         # Mirrors handle_snapshot_frame_: V1 SnapshotPayload carries both
@@ -51,6 +56,8 @@ class DeviceFreshnessSim:
         self.link_connected = True
         self.last_frame_ms = now_ms
         source_fresh = input_cache_valid and holding_cache_valid
+        if source_fresh:
+            self.values_marked_stale = False
         self._set_device_freshness(source_fresh)
 
     def receive_v2_frame(self, now_ms: int, group: str, cache_valid: bool) -> None:
@@ -65,20 +72,20 @@ class DeviceFreshnessSim:
         else:
             self.input_source_fresh = cache_valid
         source_fresh = self.input_source_fresh and self.holding_source_fresh
+        if source_fresh:
+            self.values_marked_stale = False
         self._set_device_freshness(source_fresh)
 
     def tick(self, now_ms: int, stale_timeout_ms: int = STALE_TIMEOUT_MS) -> None:
-        # Mirrors update_stale_state_: transport-link fallback only. Can
-        # only ever detect GOING stale -- never sets fresh=True (recovery
-        # always happens via a frame arriving, in receive_*_frame above).
+        # Mirrors update_stale_state_: transport-link fallback only.
         if not self.have_snapshot:
             return
-        if not self.data_fresh:
-            return  # already stale, nothing to transition
         link_alive = self.last_frame_ms is not None and (now_ms - self.last_frame_ms) <= stale_timeout_ms
         if link_alive:
             return
+        self.link_connected = False
         self._set_device_freshness(False)
+        self._mark_values_stale()
 
 
 # ---------------------------------------------------------------------------
@@ -117,6 +124,8 @@ def test_frames_keep_arriving_but_source_flag_false_goes_stale() -> None:
     # since frames never stopped arriving.
     dev.tick(now_ms=1100, stale_timeout_ms=5000)
     assert dev.data_fresh is False
+    assert dev.stale_transitions == 0
+    assert dev.values_marked_stale is False
 
 
 def test_v2_holding_group_alone_going_stale_marks_device_stale() -> None:
@@ -126,6 +135,8 @@ def test_v2_holding_group_alone_going_stale_marks_device_stale() -> None:
     assert dev.data_fresh is True
     dev.receive_v2_frame(2000, "status", cache_valid=False)
     assert dev.data_fresh is False  # combined AND: holding alone stale is enough
+    assert dev.stale_transitions == 0
+    assert dev.values_marked_stale is False
 
 
 # ---------------------------------------------------------------------------
@@ -134,13 +145,15 @@ def test_v2_holding_group_alone_going_stale_marks_device_stale() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_stale_transition_fires_exactly_once_while_persistently_stale() -> None:
+def test_source_stale_does_not_blank_while_packets_keep_arriving() -> None:
     dev = DeviceFreshnessSim()
     dev.receive_v1_frame(0, True, True)
     dev.receive_v1_frame(1000, False, False)
     dev.receive_v1_frame(2000, False, False)
     dev.receive_v1_frame(3000, False, False)
-    assert dev.stale_transitions == 1  # mark_device_stale_ only on the transition, not every frame
+    assert dev.data_fresh is False
+    assert dev.stale_transitions == 0
+    assert dev.values_marked_stale is False
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +169,7 @@ def test_one_device_stale_other_independent() -> None:
     dev1.receive_v1_frame(1000, False, False)
     assert dev1.data_fresh is False
     assert dev2.data_fresh is True
+    assert dev1.stale_transitions == 0
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +227,18 @@ def test_transport_link_dead_still_detected_by_arrival_timeout() -> None:
     dev.tick(now_ms=5001, stale_timeout_ms=5000)
     assert dev.data_fresh is False
     assert dev.stale_transitions == 1
+    assert dev.values_marked_stale is True
+
+
+def test_transport_timeout_blanks_even_after_source_was_already_stale() -> None:
+    dev = DeviceFreshnessSim()
+    dev.receive_v1_frame(0, True, True)
+    dev.receive_v1_frame(1000, False, False)
+    assert dev.data_fresh is False
+    assert dev.stale_transitions == 0
+    dev.tick(now_ms=7001, stale_timeout_ms=5000)
+    assert dev.stale_transitions == 1
+    assert dev.values_marked_stale is True
 
 
 def test_transport_alive_source_fresh_arrival_timeout_never_fires() -> None:
@@ -231,11 +257,12 @@ def main() -> int:
         test_normal_v2_frames_both_groups_marks_fresh,
         test_frames_keep_arriving_but_source_flag_false_goes_stale,
         test_v2_holding_group_alone_going_stale_marks_device_stale,
-        test_stale_transition_fires_exactly_once_while_persistently_stale,
+        test_source_stale_does_not_blank_while_packets_keep_arriving,
         test_one_device_stale_other_independent,
         test_recovery_only_on_a_frame_reporting_fresh_again,
         test_v2_mixed_group_recovery_requires_both_bits_fresh_again,
         test_transport_link_dead_still_detected_by_arrival_timeout,
+        test_transport_timeout_blanks_even_after_source_was_already_stale,
         test_transport_alive_source_fresh_arrival_timeout_never_fires,
     ]
     for test in tests:

@@ -81,7 +81,7 @@ display_protocol_uart:
   uart_id: gateway_uart
   rx_gpio: 44
   tx_gpio: 43
-  stale_timeout: 5s
+  stale_timeout: 60s
   trace_frames: false
 
 display:
@@ -90,6 +90,31 @@ display:
     id: main_display
     auto_clear_enabled: false
     update_interval: never
+
+globals:
+  - id: system_power_blink_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: system_power_blink_visible
+    type: bool
+    restore_value: no
+    initial_value: 'true'
+
+interval:
+  - interval: 500ms
+    then:
+      - lambda: |-
+          if (!id(system_power_blink_active)) {
+            return;
+          }
+          id(system_power_blink_visible) = !id(system_power_blink_visible);
+          lv_obj_set_style_text_color(
+            id(power_total_label),
+            lv_color_hex(id(system_power_blink_visible) ? 0xFF3B30 : 0x202020),
+            0
+          );
+          lv_obj_send_event(id(power_total_label), lvgl::lv_update_event, nullptr);
 
 lvgl:
   displays:
@@ -114,11 +139,12 @@ lvgl:
   # Stage 37: HMI redesign per the attached mockup -- TOTAL/LPX1/LPX2
   # numeric columns with a shared row-label column on the left. Every value
   # label reads a `display_protocol_uart` sensor object (raw pass-through
-  # OR one of the Stage 37 derived sensors computed in
-  # DisplayProtocolUARTComponent::recompute_derived_ -- Solar/Power/
-  # Grid/Battery per inverter plus TOTAL), never a second display-only
-  # calculation. Unavailable/not-fresh values publish NAN, and every
-  # lambda below renders that as "--" instead of a misleading number.
+  # OR one of the Stage 37/39B derived/system sensors computed/published in
+  # DisplayProtocolUARTComponent. Stage 39B: TOTAL Power now comes from
+  # Controller `system_output_power`, while Solar/Grid/Battery totals remain
+  # inverter-derived.
+  # Unavailable/not-fresh values publish NAN, and every lambda below renders
+  # that as "--" instead of a misleading number.
   # Layout is row-major: each row below is one full-width flex row with
   # exactly 4 cells (label, TOTAL, LPX1, LPX2), so column alignment across
   # rows falls out naturally from matching cell widths, not from
@@ -203,21 +229,9 @@ lvgl:
                 - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
                 - label: {id: pv2_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
                 - label: {id: pv2_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
-          # Power = Load Power + EPS Power per inverter. Always red.
-          - obj:
-              width: 100%
-              height: 40
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "Power", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - label: {id: power_total_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
-                - label: {id: power_1_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
-                - label: {id: power_2_label, text: "--", text_font: montserrat_26, text_color: 0xFF3B30, text_align: center, flex_grow: 1}
-          # Grid = Power To Grid - Power From Grid. Signed; green=export,
-          # red=import. Initial/zero/unavailable render white/neutral.
+          # Grid = PowerToGrid-PowerFromGrid per inverter, TOTAL = both
+          # inverters combined. Positive/export is green; negative/import is
+          # red.
           - obj:
               width: 100%
               height: 40
@@ -244,15 +258,6 @@ lvgl:
                 - label: {id: battery_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
                 - label: {id: battery_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
                 - label: {id: battery_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-          - obj:
-              width: 100%
-              height: 10
-              border_width: 0
-              pad_top: 4
-              pad_bottom: 4
-              scrollable: false
-              widgets:
-                - obj: {width: 100%, height: 2, bg_color: 0x444444, border_width: 0, pad_all: 0}
           # SOC: per-inverter only, no TOTAL (percentages don't sum).
           - obj:
               width: 100%
@@ -266,45 +271,123 @@ lvgl:
                 - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
                 - label: {id: soc_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
                 - label: {id: soc_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-          # Export Limit (max_backflow_power): per-inverter only, no TOTAL.
           - obj:
               width: 100%
-              height: 30
+              height: 10
               border_width: 0
-              pad_all: 0
+              pad_top: 4
+              pad_bottom: 4
               scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
               widgets:
-                - label: {text: "Export Limit", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
-                - label: {id: export_limit_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFD600, text_align: center, flex_grow: 1}
-                - label: {id: export_limit_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFD600, text_align: center, flex_grow: 1}
-          # Export: user-facing inverse of zero_export_enabled (ON = export
-          # allowed). Per-inverter only, no TOTAL. Dynamic green/red.
+                - obj: {width: 100%, height: 2, bg_color: 0x444444, border_width: 0, pad_all: 0}
           - obj:
               width: 100%
-              height: 30
+              height: 86
               border_width: 0
-              pad_all: 0
+              pad_top: 2
+              pad_bottom: 0
               scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: stretch}
               widgets:
-                - label: {text: "Export", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
-                - label: {id: export_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: export_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                - obj:
+                    width: 42%
+                    height: 100%
+                    border_width: 0
+                    pad_right: 8
+                    scrollable: false
+                    layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+                    widgets:
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Power", text_font: montserrat_20, text_color: 0xFFFFFF, width: 90}
+                            - label: {id: power_total_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: right, flex_grow: 1}
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Grid V", text_font: montserrat_20, text_color: 0xFFFFFF, width: 90}
+                            - label: {id: grid_raw_voltage_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: right, flex_grow: 1}
+                - obj:
+                    width: 58%
+                    height: 100%
+                    border_width: 0
+                    pad_left: 94
+                    scrollable: false
+                    layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+                    widgets:
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Export Limit", text_font: montserrat_20, text_color: 0xFFFFFF, width: 130}
+                            - label: {id: export_limit_1_label, text: "--", text_font: montserrat_24, text_color: 0xFFD600, text_align: left, flex_grow: 1}
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Export", text_font: montserrat_20, text_color: 0xFFFFFF, width: 130}
+                            - label: {id: export_1_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
 
 # Stage 37: raw pass-through sensors needed either as a directly-displayed
-# row (PV1, PV2, SOC, Export Limit) or purely as a computation input for
+# row (PV1, PV2, SOC) or purely as a computation input for
 # recompute_derived_ (Load/EPS/PowerToGrid/PowerFromGrid/BatteryCharge/
 # BatteryDischarge -- no LVGL label reads these directly, only the derived
-# Power/Grid/Battery sensors below do), plus the Stage 37 derived sensors
-# themselves (per-inverter and TOTAL). Same "only declare what's used"
-# convention as Stage 34/35 -- see stages/Stage34.md.
+# Grid/Battery sensors below do), plus the Stage 37 derived sensors
+# themselves. Controller/system Power and Grid V are shown in the lower
+# left parameter column. Export Limit/Export use inverter 1 because both
+# inverters are synchronized in parallel operation.
 
 sensor:
   - platform: display_protocol_uart
     display_protocol_uart_id: gateway_receiver
+    inverter1_gateway_snapshot_age:
+      id: inverter1_packet_age_ms
+      internal: true
+      on_value:
+        then:
+          - lambda: |-
+              char age[12];
+              const uint32_t seconds = static_cast<uint32_t>(x / 1000.0f);
+              if (seconds < 60) {
+                snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
+              } else {
+                snprintf(age, sizeof(age), "%um%02us",
+                         static_cast<unsigned int>(seconds / 60),
+                         static_cast<unsigned int>(seconds % 60));
+              }
+
+              char header_text[56];
+              if (seconds < 15) {
+                snprintf(header_text, sizeof(header_text), "LXP1 #00E676 On#");
+              } else if (seconds < 60) {
+                snprintf(header_text, sizeof(header_text), "LXP1 #FFD600 Wait (%s)#", age);
+              } else {
+                snprintf(header_text, sizeof(header_text), "LXP1 #FF3B30 Off (%s)#", age);
+              }
+
+              const char *header_current = lv_label_get_text(id(header1_label));
+              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                lv_label_set_text(id(header1_label), header_text);
+                lv_obj_send_event(id(header1_label), lvgl::lv_update_event, nullptr);
+              }
     inverter1_pv1_power:
       name: "Inverter 1 PV1 Power"
       id: inverter1_pv1_power
@@ -380,11 +463,11 @@ sensor:
       on_value:
         then:
           - lambda: |-
-              char text[24];
+              char text[40];
               if (std::isnan(x)) {
                 snprintf(text, sizeof(text), "--");
               } else {
-                snprintf(text, sizeof(text), "%.0f%%", x);
+                snprintf(text, sizeof(text), "%.0f%% (%.0f W)", x, x * 120.0f);
               }
               const char *current = lv_label_get_text(id(export_limit_1_label));
               if (current == nullptr || strcmp(current, text) != 0) {
@@ -411,20 +494,6 @@ sensor:
     inverter1_derived_power:
       name: "Inverter 1 Derived Power"
       id: inverter1_derived_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else {
-                snprintf(text, sizeof(text), "%.0f W", x);
-              }
-              const char *current = lv_label_get_text(id(power_1_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(power_1_label), text);
-                lv_obj_send_event(id(power_1_label), lvgl::lv_update_event, nullptr);
-              }
     inverter1_grid_net:
       name: "Inverter 1 Grid"
       id: inverter1_grid_net
@@ -492,6 +561,36 @@ sensor:
                 lv_label_set_text(id(pv1_2_label), text);
                 lv_obj_send_event(id(pv1_2_label), lvgl::lv_update_event, nullptr);
               }
+    inverter2_gateway_snapshot_age:
+      id: inverter2_packet_age_ms
+      internal: true
+      on_value:
+        then:
+          - lambda: |-
+              char age[12];
+              const uint32_t seconds = static_cast<uint32_t>(x / 1000.0f);
+              if (seconds < 60) {
+                snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
+              } else {
+                snprintf(age, sizeof(age), "%um%02us",
+                         static_cast<unsigned int>(seconds / 60),
+                         static_cast<unsigned int>(seconds % 60));
+              }
+
+              char header_text[56];
+              if (seconds < 15) {
+                snprintf(header_text, sizeof(header_text), "LXP2 #00E676 On#");
+              } else if (seconds < 60) {
+                snprintf(header_text, sizeof(header_text), "LXP2 #FFD600 Wait (%s)#", age);
+              } else {
+                snprintf(header_text, sizeof(header_text), "LXP2 #FF3B30 Off (%s)#", age);
+              }
+
+              const char *header_current = lv_label_get_text(id(header2_label));
+              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                lv_label_set_text(id(header2_label), header_text);
+                lv_obj_send_event(id(header2_label), lvgl::lv_update_event, nullptr);
+              }
     inverter2_pv2_power:
       name: "Inverter 2 PV2 Power"
       id: inverter2_pv2_power
@@ -547,20 +646,6 @@ sensor:
     inverter2_max_backflow_power:
       name: "Inverter 2 Max Backflow Power"
       id: inverter2_max_backflow_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else {
-                snprintf(text, sizeof(text), "%.0f%%", x);
-              }
-              const char *current = lv_label_get_text(id(export_limit_2_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(export_limit_2_label), text);
-                lv_obj_send_event(id(export_limit_2_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_solar:
       name: "Inverter 2 Solar"
       id: inverter2_solar
@@ -581,20 +666,6 @@ sensor:
     inverter2_derived_power:
       name: "Inverter 2 Derived Power"
       id: inverter2_derived_power
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else {
-                snprintf(text, sizeof(text), "%.0f W", x);
-              }
-              const char *current = lv_label_get_text(id(power_2_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(power_2_label), text);
-                lv_obj_send_event(id(power_2_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_grid_net:
       name: "Inverter 2 Grid"
       id: inverter2_grid_net
@@ -662,23 +733,72 @@ sensor:
                 lv_label_set_text(id(solar_total_label), text);
                 lv_obj_send_event(id(solar_total_label), lvgl::lv_update_event, nullptr);
               }
-    power_total:
-      name: "Total Power"
-      id: power_total_sensor
+    system_output_power:
+      name: "System Output Power"
+      id: system_output_power_sensor
       on_value:
         then:
           - lambda: |-
               char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              bool blink = false;
               if (std::isnan(x)) {
                 snprintf(text, sizeof(text), "--");
+                id(system_power_blink_active) = false;
+              } else if (x < 2000.0f) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0x00E676);
+                id(system_power_blink_active) = false;
+              } else if (x < 4000.0f) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFFD600);
+                id(system_power_blink_active) = false;
+              } else if (x <= 5000.0f) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+                id(system_power_blink_active) = false;
               } else {
                 snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFF3B30);
+                blink = true;
+                id(system_power_blink_active) = true;
+                id(system_power_blink_visible) = true;
               }
               const char *current = lv_label_get_text(id(power_total_label));
               if (current == nullptr || strcmp(current, text) != 0) {
                 lv_label_set_text(id(power_total_label), text);
-                lv_obj_send_event(id(power_total_label), lvgl::lv_update_event, nullptr);
               }
+              lv_obj_set_style_text_color(id(power_total_label), color, 0);
+              if (!blink) {
+                id(system_power_blink_visible) = true;
+              }
+              lv_obj_send_event(id(power_total_label), lvgl::lv_update_event, nullptr);
+    grid_raw_voltage:
+      name: "Grid Raw Voltage"
+      id: grid_raw_voltage_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.1f V", x);
+                if (x >= 200.0f && x <= 240.0f) {
+                  color = lv_color_hex(0x00E676);
+                } else if ((x >= 185.0f && x < 200.0f) || (x > 240.0f && x <= 255.0f)) {
+                  color = lv_color_hex(0xFFD600);
+                } else {
+                  color = lv_color_hex(0xFF3B30);
+                }
+              }
+              const char *current = lv_label_get_text(id(grid_raw_voltage_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_raw_voltage_label), text);
+              }
+              lv_obj_set_style_text_color(id(grid_raw_voltage_label), color, 0);
+              lv_obj_send_event(id(grid_raw_voltage_label), lvgl::lv_update_event, nullptr);
     grid_total:
       name: "Total Grid"
       id: grid_total_sensor
@@ -733,30 +853,31 @@ sensor:
 binary_sensor:
   - platform: display_protocol_uart
     display_protocol_uart_id: gateway_receiver
-    inverter1_gateway_data_fresh:
-      name: "Inverter 1 Fresh"
-      id: inverter1_fresh
-      # Without this, ESPHome's on_state trigger never fires on the very
-      # first publish_state() call (codegen default is False unless set
-      # here) -- see the identical Stage 35 fix for zero_export below.
+    display_enabled:
+      id: display_enabled_sensor
+      internal: true
       trigger_on_initial_state: true
       on_state:
         then:
           - lambda: |-
-              // Header: "LXP1 On"/"LXP1 Off", name in the label's default
-              // color (white), status word recolored inline via LVGL's
-              // "#RRGGBB text#" recolor markup (recolor: true on this
-              // label -- see the header widget above).
-              char header_text[32];
-              snprintf(header_text, sizeof(header_text), x ? "LXP1 #00E676 On#" : "LXP1 #FF3B30 Off#");
-              const char *header_current = lv_label_get_text(id(header1_label));
-              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
-                lv_label_set_text(id(header1_label), header_text);
-                lv_obj_send_event(id(header1_label), lvgl::lv_update_event, nullptr);
-              }
+              // Controller-owned display_enabled desired state. The
+              // Display boots visible because the mipi_rgb model enables
+              // these same CH422G pins during setup; this callback only
+              // follows the first valid Controller state and later changes.
+              // UART decode, LVGL state, and firmware keep running while
+              // the panel/backlight enable lines are low.
+              id(io_expander).digital_write(2, x);
+              id(io_expander).digital_write(6, x);
+    inverter1_gateway_link_connected:
+      id: inverter1_link_connected
+      internal: true
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
               // Export is a binary_sensor pair (no NAN to lean on), so its
-              // staleness gating is re-evaluated here directly rather than
-              // through recompute_derived_.
+              // transport-Off gating is re-evaluated here directly rather
+              // than through recompute_derived_.
               char text[8];
               lv_color_t color = lv_color_hex(0xFFFFFF);
               bool trusted = x && id(inverter1_zero_export_enabled).has_state();
@@ -775,6 +896,13 @@ binary_sensor:
                 lv_obj_set_style_text_color(id(export_1_label), color, 0);
                 lv_obj_send_event(id(export_1_label), lvgl::lv_update_event, nullptr);
               }
+    inverter1_gateway_data_fresh:
+      name: "Inverter 1 Fresh"
+      id: inverter1_fresh
+      # Without this, ESPHome's on_state trigger never fires on the very
+      # first publish_state() call (codegen default is False unless set
+      # here) -- see the identical Stage 35 fix for zero_export below.
+      trigger_on_initial_state: true
     inverter1_zero_export_enabled:
       name: "Inverter 1 Zero Export"
       id: inverter1_zero_export_enabled
@@ -788,7 +916,7 @@ binary_sensor:
               // Off when clear) -- not the originally-assumed inverse.
               char text[8];
               lv_color_t color = lv_color_hex(0xFFFFFF);
-              bool trusted = id(inverter1_fresh).has_state() && id(inverter1_fresh).state;
+              bool trusted = id(inverter1_link_connected).has_state() && id(inverter1_link_connected).state;
               if (!trusted) {
                 snprintf(text, sizeof(text), "--");
               } else if (x) {
@@ -808,56 +936,7 @@ binary_sensor:
       name: "Inverter 2 Fresh"
       id: inverter2_fresh
       trigger_on_initial_state: true
-      on_state:
-        then:
-          - lambda: |-
-              char header_text[32];
-              snprintf(header_text, sizeof(header_text), x ? "LXP2 #00E676 On#" : "LXP2 #FF3B30 Off#");
-              const char *header_current = lv_label_get_text(id(header2_label));
-              if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
-                lv_label_set_text(id(header2_label), header_text);
-                lv_obj_send_event(id(header2_label), lvgl::lv_update_event, nullptr);
-              }
-              char text[8];
-              lv_color_t color = lv_color_hex(0xFFFFFF);
-              bool trusted = x && id(inverter2_zero_export_enabled).has_state();
-              if (!trusted) {
-                snprintf(text, sizeof(text), "--");
-              } else if (id(inverter2_zero_export_enabled).state) {
-                snprintf(text, sizeof(text), "On");
-                color = lv_color_hex(0x00E676);
-              } else {
-                snprintf(text, sizeof(text), "Off");
-                color = lv_color_hex(0xFF3B30);
-              }
-              const char *current = lv_label_get_text(id(export_2_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(export_2_label), text);
-                lv_obj_set_style_text_color(id(export_2_label), color, 0);
-                lv_obj_send_event(id(export_2_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_zero_export_enabled:
       name: "Inverter 2 Zero Export"
       id: inverter2_zero_export_enabled
       trigger_on_initial_state: true
-      on_state:
-        then:
-          - lambda: |-
-              char text[8];
-              lv_color_t color = lv_color_hex(0xFFFFFF);
-              bool trusted = id(inverter2_fresh).has_state() && id(inverter2_fresh).state;
-              if (!trusted) {
-                snprintf(text, sizeof(text), "--");
-              } else if (x) {
-                snprintf(text, sizeof(text), "On");
-                color = lv_color_hex(0x00E676);
-              } else {
-                snprintf(text, sizeof(text), "Off");
-                color = lv_color_hex(0xFF3B30);
-              }
-              const char *current = lv_label_get_text(id(export_2_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(export_2_label), text);
-                lv_obj_set_style_text_color(id(export_2_label), color, 0);
-                lv_obj_send_event(id(export_2_label), lvgl::lv_update_event, nullptr);
-              }

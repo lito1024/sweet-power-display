@@ -101,3 +101,10 @@ compilable configuration (UART + sensors only, no display/LVGL). Every
 production catalog entity is available as `inverter1_<key>` /
 `inverter2_<key>` sensor config keys; see `ENTITY_MODEL.md` in
 `SweetPower-Project-Docs` for the full list.
+
+## Runtime Behavior
+
+The offline display keeps last valid inverter values during short telemetry
+gaps and blanks them only when an inverter path reaches `Off`. See
+`docs/DisplayRuntimeSemantics.md` for the `On`/`Wait`/`Off` timing and value
+retention rules.

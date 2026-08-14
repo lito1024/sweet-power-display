@@ -29,6 +29,22 @@ FIELD_GRID_FLOW = 9005
 FIELD_PV1_VOLTAGE = 9006
 FIELD_ENERGY_TO_GRID_TOTAL = 9047
 FIELD_GENERATOR_ENERGY_TODAY = 9084
+FIELD_SYSTEM_OUTPUT_VOLTAGE = 10001
+FIELD_SYSTEM_OUTPUT_CURRENT = 10002
+FIELD_SYSTEM_OUTPUT_POWER = 10003
+FIELD_SYSTEM_OUTPUT_ENERGY = 10004
+FIELD_SYSTEM_OUTPUT_FREQUENCY = 10005
+FIELD_SYSTEM_OUTPUT_POWER_FACTOR = 10006
+FIELD_GRID_INPUT_VOLTAGE = 10007
+FIELD_GRID_INPUT_CURRENT = 10008
+FIELD_GRID_INPUT_POWER = 10009
+FIELD_GRID_INPUT_ENERGY = 10010
+FIELD_GRID_INPUT_FREQUENCY = 10011
+FIELD_GRID_INPUT_POWER_FACTOR = 10012
+FIELD_GRID_RAW_VOLTAGE = 10013
+FIELD_DISPLAY_ENABLED = 10014
+INVALID_I32 = -2147483648
+DEVICE_CONTROLLER_SYSTEM = 3
 TRACKED_FIELDS = (
     FIELD_PV1_POWER,
     FIELD_BATTERY_SOC,
@@ -40,6 +56,22 @@ TRACKED_FIELDS = (
     FIELD_PV1_VOLTAGE,
     FIELD_ENERGY_TO_GRID_TOTAL,
     FIELD_GENERATOR_ENERGY_TODAY,
+)
+SYSTEM_FIELDS = (
+    FIELD_SYSTEM_OUTPUT_VOLTAGE,
+    FIELD_SYSTEM_OUTPUT_CURRENT,
+    FIELD_SYSTEM_OUTPUT_POWER,
+    FIELD_SYSTEM_OUTPUT_ENERGY,
+    FIELD_SYSTEM_OUTPUT_FREQUENCY,
+    FIELD_SYSTEM_OUTPUT_POWER_FACTOR,
+    FIELD_GRID_INPUT_VOLTAGE,
+    FIELD_GRID_INPUT_CURRENT,
+    FIELD_GRID_INPUT_POWER,
+    FIELD_GRID_INPUT_ENERGY,
+    FIELD_GRID_INPUT_FREQUENCY,
+    FIELD_GRID_INPUT_POWER_FACTOR,
+    FIELD_GRID_RAW_VOLTAGE,
+    FIELD_DISPLAY_ENABLED,
 )
 
 
@@ -116,6 +148,9 @@ class Receiver:
         # sensor arrays). device_id 0/other (unrecognized) is intentionally
         # not recorded here, mirroring device_index_for_id_ returning None.
         self.device_values: dict[tuple[int, int], int] = {}
+        # Stage 39B: Controller/system values live at device_id 3 and are
+        # separate from the inverter arrays, not a synthetic inverter 3.
+        self.system_values: dict[int, int | None] = {}
         self.last_frame_ms_by_device: dict[int, int] = {}
 
     def feed(self, data: bytes, now_ms: int = 0) -> None:
@@ -172,6 +207,8 @@ class Receiver:
                 for index in range(count):
                     offset = V2_PAYLOAD_HEADER_SIZE + index * 6
                     field_id, value = struct.unpack_from("<Hi", payload, offset)
+                    if device_id == DEVICE_CONTROLLER_SYSTEM and field_id in SYSTEM_FIELDS:
+                        self.system_values[field_id] = None if value == INVALID_I32 else value
                     if field_id in TRACKED_FIELDS:
                         self.values[field_id] = value
                         if device_index is not None:
@@ -311,6 +348,56 @@ def test_diagnostics_fields_decoded() -> None:
     assert rx.values[FIELD_POWER_TO_GRID] == 0
     assert rx.values[FIELD_POWER_FROM_GRID] == 32
     assert rx.values[FIELD_GRID_FLOW] == 32
+
+
+def test_controller_system_device_id_3_is_accepted() -> None:
+    rx = Receiver()
+    rx.feed(encode_v2(1, [(FIELD_SYSTEM_OUTPUT_POWER, 5000)], device_id=DEVICE_CONTROLLER_SYSTEM))
+    assert rx.valid == 1
+    assert rx.system_values[FIELD_SYSTEM_OUTPUT_POWER] == 5000
+    assert (DEVICE_CONTROLLER_SYSTEM, FIELD_SYSTEM_OUTPUT_POWER) not in rx.device_values
+
+
+def test_controller_display_enabled_on_off_reaches_system_state() -> None:
+    rx = Receiver()
+    rx.feed(encode_v2(1, [(FIELD_DISPLAY_ENABLED, 1)], device_id=DEVICE_CONTROLLER_SYSTEM), now_ms=1000)
+    assert rx.system_values[FIELD_DISPLAY_ENABLED] == 1
+    rx.feed(encode_v2(2, [(FIELD_DISPLAY_ENABLED, 0)], device_id=DEVICE_CONTROLLER_SYSTEM), now_ms=2000)
+    assert rx.system_values[FIELD_DISPLAY_ENABLED] == 0
+
+
+def test_controller_loss_does_not_force_display_enabled_off() -> None:
+    rx = Receiver()
+    rx.feed(encode_v2(1, [(FIELD_DISPLAY_ENABLED, 0)], device_id=DEVICE_CONTROLLER_SYSTEM), now_ms=1000)
+    assert rx.system_values[FIELD_DISPLAY_ENABLED] == 0
+    assert rx.stale(now_ms=7001)
+    assert rx.system_values[FIELD_DISPLAY_ENABLED] == 0
+
+
+def test_all_stage39b_system_fields_decode() -> None:
+    rx = Receiver()
+    values = [(field_id, 1000 + index) for index, field_id in enumerate(SYSTEM_FIELDS)]
+    rx.feed(encode_v2(1, values, device_id=DEVICE_CONTROLLER_SYSTEM))
+    assert rx.valid == 1
+    assert rx.system_values == dict(values)
+
+
+def test_controller_invalid_value_blanks_only_that_system_field() -> None:
+    rx = Receiver()
+    rx.feed(
+        encode_v2(
+            1,
+            [
+                (FIELD_SYSTEM_OUTPUT_POWER, INVALID_I32),
+                (FIELD_GRID_INPUT_POWER, 2500),
+                (FIELD_GRID_RAW_VOLTAGE, 2634),
+            ],
+            device_id=DEVICE_CONTROLLER_SYSTEM,
+        )
+    )
+    assert rx.system_values[FIELD_SYSTEM_OUTPUT_POWER] is None
+    assert rx.system_values[FIELD_GRID_INPUT_POWER] == 2500
+    assert rx.system_values[FIELD_GRID_RAW_VOLTAGE] == 2634
 
 
 def test_diagnostics_independent_stream_from_fast() -> None:
@@ -484,6 +571,11 @@ def main() -> int:
         test_unknown_v2_field_ignored,
         test_diagnostics_fields_decoded,
         test_diagnostics_independent_stream_from_fast,
+        test_controller_system_device_id_3_is_accepted,
+        test_controller_display_enabled_on_off_reaches_system_state,
+        test_controller_loss_does_not_force_display_enabled_off,
+        test_all_stage39b_system_fields_decode,
+        test_controller_invalid_value_blanks_only_that_system_field,
         test_multi_batch_first_middle_last_all_update,
         test_unavailable_field_never_appears_before_first_receipt,
         test_real_zero_publishes_as_zero_after_actual_receipt,

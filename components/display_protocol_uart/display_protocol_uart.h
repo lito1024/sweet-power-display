@@ -17,10 +17,10 @@ namespace display_protocol_uart {
 
 class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
  public:
-  // Stage 32: exactly two telemetry sources (device_id 1 = inverter 1,
-  // device_id 2 = inverter 2), indexed 0/1 in every per-device array below.
-  // device_id 0 (aggregate) is reserved for a future stage and is not
-  // published to any entity yet.
+  // Stage 32: exactly two LuxPower inverter telemetry sources (device_id 1 =
+  // inverter 1, device_id 2 = inverter 2), indexed 0/1 in every per-inverter
+  // array below. Stage 39B adds Controller/system measurements at device_id 3,
+  // kept separate so they never masquerade as "LXP3".
   static constexpr uint8_t kDeviceCount = 2;
 
   void setup() override;
@@ -176,6 +176,21 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_grid_total_sensor(sensor::Sensor *sensor) { this->grid_total_sensor_ = sensor; }
   void set_battery_total_sensor(sensor::Sensor *sensor) { this->battery_total_sensor_ = sensor; }
 
+  void set_system_output_voltage_sensor(sensor::Sensor *sensor) { this->system_output_voltage_sensor_ = sensor; }
+  void set_system_output_current_sensor(sensor::Sensor *sensor) { this->system_output_current_sensor_ = sensor; }
+  void set_system_output_power_sensor(sensor::Sensor *sensor) { this->system_output_power_sensor_ = sensor; }
+  void set_system_output_energy_sensor(sensor::Sensor *sensor) { this->system_output_energy_sensor_ = sensor; }
+  void set_system_output_frequency_sensor(sensor::Sensor *sensor) { this->system_output_frequency_sensor_ = sensor; }
+  void set_system_output_power_factor_sensor(sensor::Sensor *sensor) { this->system_output_power_factor_sensor_ = sensor; }
+  void set_grid_input_voltage_sensor(sensor::Sensor *sensor) { this->grid_input_voltage_sensor_ = sensor; }
+  void set_grid_input_current_sensor(sensor::Sensor *sensor) { this->grid_input_current_sensor_ = sensor; }
+  void set_grid_input_power_sensor(sensor::Sensor *sensor) { this->grid_input_power_sensor_ = sensor; }
+  void set_grid_input_energy_sensor(sensor::Sensor *sensor) { this->grid_input_energy_sensor_ = sensor; }
+  void set_grid_input_frequency_sensor(sensor::Sensor *sensor) { this->grid_input_frequency_sensor_ = sensor; }
+  void set_grid_input_power_factor_sensor(sensor::Sensor *sensor) { this->grid_input_power_factor_sensor_ = sensor; }
+  void set_grid_raw_voltage_sensor(sensor::Sensor *sensor) { this->grid_raw_voltage_sensor_ = sensor; }
+  void set_display_enabled_sensor(binary_sensor::BinarySensor *sensor) { this->display_enabled_sensor_ = sensor; }
+
   bool send_raw_frame(const uint8_t *data, size_t length);
 
  protected:
@@ -186,21 +201,20 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void handle_decode_result_(ESPTelemetry::DecodeResult result, const ESPTelemetry::Frame &frame, uint32_t now);
   void handle_snapshot_frame_(const ESPTelemetry::Frame &frame, uint32_t now);
   void handle_telemetry_frame_(const ESPTelemetry::Frame &frame, uint32_t now);
+  void handle_system_telemetry_frame_(const ESPTelemetry::TelemetryPayload &payload, const ESPTelemetry::Frame &frame,
+                                      uint32_t now);
   void publish_snapshot_(uint8_t device_index, uint32_t now);
   void publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now);
+  void publish_system_telemetry_field_(uint16_t field_id, int32_t value);
   void publish_diagnostics_(uint32_t now);
   void update_stale_state_(uint32_t now);
-  // Stage 38: source-freshness now comes from the Gateway's own
-  // per-frame SnapshotFlagInputCacheValid/HoldingCacheValid /
-  // TelemetryGroupFlagCacheValid signal (see handle_snapshot_frame_/
-  // handle_telemetry_frame_), not merely "a frame arrived" --
-  // update_stale_state_ above remains the fallback for "no frame at all
-  // within stale_timeout_ms_" (the transport-link-dead case). Both paths
-  // funnel through set_device_freshness_ so the NAN-blanking/logging on a
-  // fresh->stale transition happens exactly once, regardless of which
-  // path detected it. See stages/Stage38.md.
+  // Stage 38 source-freshness still comes from the Gateway's own per-frame
+  // cache-valid flags and is published as diagnostics. The offline HMI keeps
+  // last valid readings during short source/cache gaps and blanks values only
+  // when no packets arrive for stale_timeout_ms_ (the visible Off state).
   void set_device_freshness_(uint8_t device_index, bool fresh);
   void mark_device_stale_(uint8_t device_index);
+  void mark_system_stale_();
   void publish_binary_(binary_sensor::BinarySensor *sensor, bool value);
   void publish_float_(sensor::Sensor *sensor, float value);
   void publish_text_(text_sensor::TextSensor *sensor, const char *value);
@@ -210,15 +224,13 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   // maintain. Called from those existing update points, not a new timer.
   void update_connection_status_(uint8_t device_index);
   void trace_frame_(const ESPTelemetry::Frame &frame);
-  // Stage 37: recomputes this device's Solar/Power/Grid/Battery from the
-  // current state of the raw sensor objects (not a separate cache -- see
-  // set_solar_sensor et al.), then recomputes all four TOTAL sensors.
-  // Called after every field update for this device AND on every
-  // freshness transition, so a device going stale immediately blanks its
-  // own derived values (and any TOTAL depending on them) to NAN.
+  // Stage 37/39B: recomputes this device's Solar/Power/Grid/Battery from the
+  // current state of the raw sensor objects. Short source/cache gaps keep the
+  // last valid readings; transport Off blanks them to NAN.
   void recompute_derived_(uint8_t device_index);
   void recompute_totals_();
   static float combine_total_(sensor::Sensor *a, sensor::Sensor *b);
+  static float scaled_or_nan_(int32_t value, float scale);
 
   ESPTelemetry::Decoder decoder_;
   // Stage 32: every per-source field below is indexed [0]=inverter1(device_id
@@ -229,9 +241,13 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   bool have_snapshot_[kDeviceCount] = {false, false};
   bool data_fresh_[kDeviceCount] = {false, false};
   bool link_connected_[kDeviceCount] = {false, false};
+  bool values_marked_stale_[kDeviceCount] = {false, false};
   bool have_last_sequence_[kDeviceCount] = {false, false};
   uint16_t last_sequence_[kDeviceCount] = {0, 0};
   uint32_t last_frame_ms_[kDeviceCount] = {0, 0};
+  bool have_system_frame_ = false;
+  bool system_link_fresh_ = false;
+  uint32_t last_system_frame_ms_ = 0;
   uint32_t last_publish_ms_ = 0;
   uint32_t stale_timeout_ms_ = 5000;
   bool trace_frames_ = false;
@@ -371,6 +387,21 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *power_total_sensor_ = nullptr;
   sensor::Sensor *grid_total_sensor_ = nullptr;
   sensor::Sensor *battery_total_sensor_ = nullptr;
+
+  sensor::Sensor *system_output_voltage_sensor_ = nullptr;
+  sensor::Sensor *system_output_current_sensor_ = nullptr;
+  sensor::Sensor *system_output_power_sensor_ = nullptr;
+  sensor::Sensor *system_output_energy_sensor_ = nullptr;
+  sensor::Sensor *system_output_frequency_sensor_ = nullptr;
+  sensor::Sensor *system_output_power_factor_sensor_ = nullptr;
+  sensor::Sensor *grid_input_voltage_sensor_ = nullptr;
+  sensor::Sensor *grid_input_current_sensor_ = nullptr;
+  sensor::Sensor *grid_input_power_sensor_ = nullptr;
+  sensor::Sensor *grid_input_energy_sensor_ = nullptr;
+  sensor::Sensor *grid_input_frequency_sensor_ = nullptr;
+  sensor::Sensor *grid_input_power_factor_sensor_ = nullptr;
+  sensor::Sensor *grid_raw_voltage_sensor_ = nullptr;
+  binary_sensor::BinarySensor *display_enabled_sensor_ = nullptr;
 };
 
 }  // namespace display_protocol_uart

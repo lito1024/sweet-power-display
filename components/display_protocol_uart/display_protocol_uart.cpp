@@ -9,6 +9,7 @@ namespace esphome {
 namespace display_protocol_uart {
 
 static const char *const TAG = "display_protocol_uart";
+static constexpr uint8_t kControllerSystemDeviceId = 3;
 
 void DisplayProtocolUARTComponent::setup() {
   this->check_uart_settings(230400, 1, uart::UART_CONFIG_PARITY_NONE, 8);
@@ -158,6 +159,9 @@ void DisplayProtocolUARTComponent::handle_snapshot_frame_(const ESPTelemetry::Fr
     ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
+  if (source_fresh) {
+    this->values_marked_stale_[device_index] = false;
+  }
   this->set_device_freshness_(static_cast<uint8_t>(device_index), source_fresh);
   this->update_connection_status_(static_cast<uint8_t>(device_index));
 
@@ -174,6 +178,11 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
   }
 
   this->valid_frames_++;
+
+  if (payload.deviceId == kControllerSystemDeviceId) {
+    this->handle_system_telemetry_frame_(payload, frame, now);
+    return;
+  }
 
   const int8_t device_index_signed = device_index_for_id_(payload.deviceId);
   if (device_index_signed < 0) {
@@ -226,6 +235,9 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
     ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
+  if (source_fresh) {
+    this->values_marked_stale_[device_index] = false;
+  }
   this->set_device_freshness_(device_index, source_fresh);
   this->update_connection_status_(device_index);
 
@@ -234,6 +246,28 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
   this->publish_binary_(this->gateway_link_connected_sensor_[device_index], this->link_connected_[device_index]);
   this->trace_frame_(frame);
   this->recompute_derived_(device_index);
+}
+
+void DisplayProtocolUARTComponent::handle_system_telemetry_frame_(const ESPTelemetry::TelemetryPayload &payload,
+                                                                  const ESPTelemetry::Frame &frame, uint32_t now) {
+  this->last_system_frame_ms_ = now;
+  this->have_system_frame_ = true;
+
+  if (!this->system_link_fresh_) {
+    ESP_LOGI(TAG, "UART LINK ESTABLISHED device_id=%u",
+             static_cast<unsigned int>(kControllerSystemDeviceId));
+    ESP_LOGI(TAG,
+             "sequence: %u frame size: %u",
+             static_cast<unsigned int>(frame.sequence),
+             static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
+  }
+  this->system_link_fresh_ = true;
+
+  for (uint8_t i = 0; i < payload.fieldCount; ++i) {
+    this->publish_system_telemetry_field_(payload.fields[i].fieldId, payload.fields[i].value);
+  }
+
+  this->trace_frame_(frame);
 }
 
 void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint32_t now) {
@@ -586,6 +620,63 @@ void DisplayProtocolUARTComponent::publish_telemetry_field_(uint8_t device_index
   }
 }
 
+void DisplayProtocolUARTComponent::publish_system_telemetry_field_(uint16_t field_id, int32_t value) {
+  switch (field_id) {
+    case ESPTelemetry::FieldIdSystemOutputVoltage:
+      this->publish_float_(this->system_output_voltage_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdSystemOutputCurrent:
+      this->publish_float_(this->system_output_current_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdSystemOutputPower: {
+      const float watts = scaled_or_nan_(value, 1.0f);
+      this->publish_float_(this->system_output_power_sensor_, watts);
+      this->publish_float_(this->power_total_sensor_, watts);
+      return;
+    }
+    case ESPTelemetry::FieldIdSystemOutputEnergy:
+      this->publish_float_(this->system_output_energy_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdSystemOutputFrequency:
+      this->publish_float_(this->system_output_frequency_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdSystemOutputPowerFactor:
+      this->publish_float_(this->system_output_power_factor_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdGridInputVoltage:
+      this->publish_float_(this->grid_input_voltage_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdGridInputCurrent:
+      this->publish_float_(this->grid_input_current_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdGridInputPower: {
+      const float watts = scaled_or_nan_(value, 1.0f);
+      this->publish_float_(this->grid_input_power_sensor_, watts);
+      return;
+    }
+    case ESPTelemetry::FieldIdGridInputEnergy:
+      this->publish_float_(this->grid_input_energy_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdGridInputFrequency:
+      this->publish_float_(this->grid_input_frequency_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdGridInputPowerFactor:
+      this->publish_float_(this->grid_input_power_factor_sensor_, scaled_or_nan_(value, 100.0f));
+      return;
+    case ESPTelemetry::FieldIdGridRawVoltage:
+      this->publish_float_(this->grid_raw_voltage_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdDisplayEnabled:
+      if (value != static_cast<int32_t>(ESPTelemetry::kInvalidI32)) {
+        this->publish_binary_(this->display_enabled_sensor_, value != 0);
+      }
+      return;
+    default:
+      ESP_LOGD(TAG, "Ignoring unknown Controller/system field id %u", static_cast<unsigned int>(field_id));
+      return;
+  }
+}
+
 void DisplayProtocolUARTComponent::publish_diagnostics_(uint32_t now) {
   for (uint8_t device_index = 0; device_index < kDeviceCount; ++device_index) {
     if (this->have_snapshot_[device_index]) {
@@ -605,28 +696,31 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   // Stage 32: independent per device -- powering one Gateway off/on must
   // never affect the other's freshness state.
   //
-  // Stage 38: this is now purely the TRANSPORT-link fallback -- "no frame
-  // of any kind arrived within stale_timeout_ms_" (Gateway/Bridge/ESP-NOW
-  // itself is unreachable). It can only ever detect GOING stale, never
-  // recovery: recovery always means a frame arrived, which is handled by
-  // set_device_freshness_ from inside handle_snapshot_frame_/
-  // handle_telemetry_frame_ directly. A Gateway that is alive but has
-  // lost its own LuxPower source keeps sending frames on schedule, so
-  // this loop correctly does nothing in that case -- see
-  // handle_snapshot_frame_/handle_telemetry_frame_ for that path.
+  // Transport-link fallback: no frame of any kind arrived within
+  // stale_timeout_ms_ (Gateway/Bridge/ESP-NOW itself is unreachable). Short
+  // Gateway source/cache gaps may set data_fresh_ false, but the offline HMI
+  // keeps last valid readings until this transport timeout trips.
   for (uint8_t device_index = 0; device_index < kDeviceCount; ++device_index) {
     if (!this->have_snapshot_[device_index]) {
       continue;
-    }
-    if (!this->data_fresh_[device_index]) {
-      continue;  // already stale (transport or source), nothing to transition
     }
     const bool link_alive = (now - this->last_frame_ms_[device_index]) <= this->stale_timeout_ms_;
     if (link_alive) {
       continue;
     }
+    this->link_connected_[device_index] = false;
     this->set_device_freshness_(device_index, false);
+    if (!this->values_marked_stale_[device_index]) {
+      this->values_marked_stale_[device_index] = true;
+      this->mark_device_stale_(device_index);
+    }
     this->update_connection_status_(device_index);
+  }
+
+  if (this->have_system_frame_ && this->system_link_fresh_ &&
+      (now - this->last_system_frame_ms_) > this->stale_timeout_ms_) {
+    this->system_link_fresh_ = false;
+    this->mark_system_stale_();
   }
 }
 
@@ -634,27 +728,37 @@ void DisplayProtocolUARTComponent::set_device_freshness_(uint8_t device_index, b
   const bool was_fresh = this->data_fresh_[device_index];
   this->data_fresh_[device_index] = fresh;
   this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], fresh);
-  if (!fresh && was_fresh) {
-    this->mark_device_stale_(device_index);
-  }
+  (void) was_fresh;
 }
 
 void DisplayProtocolUARTComponent::mark_device_stale_(uint8_t device_index) {
   ESP_LOGW(TAG, "DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
-  // Stage 37/38: a stale device's readings -- whether the transport link
-  // itself died or the Gateway is alive but its LuxPower source isn't --
-  // can no longer be trusted. Republish NAN (never a frozen last value,
-  // never 0) for every directly-displayed raw value; recompute_derived_
-  // below NAN's out Solar/Power/Grid/Battery (and any TOTAL depending on
-  // this device) the same way. Reconnection self-heals: the next frame
-  // whose own flags report the source fresh again overwrites NAN via the
-  // normal publish_telemetry_field_/publish_snapshot_ paths, no extra
-  // code needed for the un-blank direction.
+  // The visible Off state means no packets arrived within stale_timeout_ms_.
+  // Only then clear displayed readings. During shorter source/cache gaps the
+  // HMI deliberately preserves the last valid values.
   this->publish_float_(this->pv1_power_sensor_[device_index], NAN);
   this->publish_float_(this->pv2_power_sensor_[device_index], NAN);
   this->publish_float_(this->battery_soc_sensor_[device_index], NAN);
   this->publish_float_(this->max_backflow_power_sensor_[device_index], NAN);
   this->recompute_derived_(device_index);
+}
+
+void DisplayProtocolUARTComponent::mark_system_stale_() {
+  ESP_LOGW(TAG, "DATA STALE device_id=%u", static_cast<unsigned int>(kControllerSystemDeviceId));
+  this->publish_float_(this->system_output_voltage_sensor_, NAN);
+  this->publish_float_(this->system_output_current_sensor_, NAN);
+  this->publish_float_(this->system_output_power_sensor_, NAN);
+  this->publish_float_(this->system_output_energy_sensor_, NAN);
+  this->publish_float_(this->system_output_frequency_sensor_, NAN);
+  this->publish_float_(this->system_output_power_factor_sensor_, NAN);
+  this->publish_float_(this->grid_input_voltage_sensor_, NAN);
+  this->publish_float_(this->grid_input_current_sensor_, NAN);
+  this->publish_float_(this->grid_input_power_sensor_, NAN);
+  this->publish_float_(this->grid_input_energy_sensor_, NAN);
+  this->publish_float_(this->grid_input_frequency_sensor_, NAN);
+  this->publish_float_(this->grid_input_power_factor_sensor_, NAN);
+  this->publish_float_(this->grid_raw_voltage_sensor_, NAN);
+  this->publish_float_(this->power_total_sensor_, NAN);
 }
 
 void DisplayProtocolUARTComponent::update_connection_status_(uint8_t device_index) {
@@ -699,26 +803,28 @@ void DisplayProtocolUARTComponent::publish_text_(text_sensor::TextSensor *sensor
 }
 
 void DisplayProtocolUARTComponent::recompute_derived_(uint8_t device_index) {
-  const bool fresh = this->data_fresh_[device_index];
+  const bool values_available = !this->values_marked_stale_[device_index];
 
   sensor::Sensor *pv1 = this->pv1_power_sensor_[device_index];
   sensor::Sensor *pv2 = this->pv2_power_sensor_[device_index];
-  const bool solar_ok = fresh && pv1 != nullptr && pv1->has_state() && pv2 != nullptr && pv2->has_state();
+  const bool solar_ok = values_available && pv1 != nullptr && pv1->has_state() && pv2 != nullptr && pv2->has_state();
   this->publish_float_(this->solar_sensor_[device_index], solar_ok ? (pv1->state + pv2->state) : NAN);
 
   sensor::Sensor *load = this->load_power_sensor_[device_index];
   sensor::Sensor *eps = this->eps_power_sensor_[device_index];
-  const bool power_ok = fresh && load != nullptr && load->has_state() && eps != nullptr && eps->has_state();
+  const bool power_ok = values_available && load != nullptr && load->has_state() && eps != nullptr && eps->has_state();
   this->publish_float_(this->derived_power_sensor_[device_index], power_ok ? (load->state + eps->state) : NAN);
 
   sensor::Sensor *to_grid = this->power_to_grid_sensor_[device_index];
   sensor::Sensor *from_grid = this->power_from_grid_sensor_[device_index];
-  const bool grid_ok = fresh && to_grid != nullptr && to_grid->has_state() && from_grid != nullptr && from_grid->has_state();
+  const bool grid_ok =
+      values_available && to_grid != nullptr && to_grid->has_state() && from_grid != nullptr && from_grid->has_state();
   this->publish_float_(this->grid_net_sensor_[device_index], grid_ok ? (to_grid->state - from_grid->state) : NAN);
 
   sensor::Sensor *charge = this->battery_charge_power_sensor_[device_index];
   sensor::Sensor *discharge = this->battery_discharge_power_sensor_[device_index];
-  const bool battery_ok = fresh && charge != nullptr && charge->has_state() && discharge != nullptr && discharge->has_state();
+  const bool battery_ok =
+      values_available && charge != nullptr && charge->has_state() && discharge != nullptr && discharge->has_state();
   this->publish_float_(this->battery_net_sensor_[device_index], battery_ok ? (charge->state - discharge->state) : NAN);
 
   this->recompute_totals_();
@@ -726,7 +832,6 @@ void DisplayProtocolUARTComponent::recompute_derived_(uint8_t device_index) {
 
 void DisplayProtocolUARTComponent::recompute_totals_() {
   this->publish_float_(this->solar_total_sensor_, combine_total_(this->solar_sensor_[0], this->solar_sensor_[1]));
-  this->publish_float_(this->power_total_sensor_, combine_total_(this->derived_power_sensor_[0], this->derived_power_sensor_[1]));
   this->publish_float_(this->grid_total_sensor_, combine_total_(this->grid_net_sensor_[0], this->grid_net_sensor_[1]));
   this->publish_float_(this->battery_total_sensor_, combine_total_(this->battery_net_sensor_[0], this->battery_net_sensor_[1]));
 }
@@ -736,6 +841,11 @@ float DisplayProtocolUARTComponent::combine_total_(sensor::Sensor *a, sensor::Se
   if (a == nullptr || b == nullptr || !a->has_state() || !b->has_state()) return NAN;
   if (std::isnan(a->state) || std::isnan(b->state)) return NAN;
   return a->state + b->state;
+}
+
+float DisplayProtocolUARTComponent::scaled_or_nan_(int32_t value, float scale) {
+  if (value == static_cast<int32_t>(ESPTelemetry::kInvalidI32)) return NAN;
+  return static_cast<float>(value) / scale;
 }
 
 void DisplayProtocolUARTComponent::trace_frame_(const ESPTelemetry::Frame &frame) {
