@@ -10,6 +10,7 @@ namespace display_protocol_uart {
 
 static const char *const TAG = "display_protocol_uart";
 static constexpr uint8_t kControllerSystemDeviceId = 3;
+static constexpr uint32_t kDisplayStatusIntervalMs = 5000;
 
 void DisplayProtocolUARTComponent::setup() {
   this->check_uart_settings(230400, 1, uart::UART_CONFIG_PARITY_NONE, 8);
@@ -41,6 +42,7 @@ void DisplayProtocolUARTComponent::loop() {
 
   this->decoder_.resetIfTimedOut(now, 1000);
   this->update_stale_state_(now);
+  this->send_display_status_(now);
 
   if (this->last_publish_ms_ == 0 || now - this->last_publish_ms_ >= 1000) {
     this->last_publish_ms_ = now;
@@ -690,6 +692,30 @@ void DisplayProtocolUARTComponent::publish_diagnostics_(uint32_t now) {
   this->publish_float_(this->uart_decode_errors_sensor_, static_cast<float>(this->decode_errors_));
   this->publish_float_(this->uart_sequence_gaps_sensor_, static_cast<float>(this->sequence_gaps_));
   this->publish_float_(this->uart_duplicate_frames_sensor_, static_cast<float>(this->duplicate_frames_));
+}
+
+void DisplayProtocolUARTComponent::send_display_status_(uint32_t now) {
+  if (this->last_display_status_tx_ms_ != 0 && now - this->last_display_status_tx_ms_ < kDisplayStatusIntervalMs) {
+    return;
+  }
+  this->last_display_status_tx_ms_ = now;
+
+  ESPTelemetry::TelemetryPayload status{};
+  status.deviceId = ESPTelemetry::kDeviceIdDisplay;
+  status.group = ESPTelemetry::TelemetryGroup::Status;
+  status.flags = ESPTelemetry::TelemetryGroupFlagValuesValid | ESPTelemetry::TelemetryGroupFlagCacheValid;
+  status.fieldCount = 1;
+  status.fields[0] = {ESPTelemetry::FieldIdDisplayMaintenanceWifiActual, 0};
+
+  uint8_t frame[ESPTelemetry::kMaxFrameSize];
+  const size_t frame_length =
+      ESPTelemetry::encodeTelemetry(status, ESPTelemetry::kMessageTypeStatus,
+                                    this->next_display_status_sequence_++, now, frame, sizeof(frame));
+  if (frame_length > 0 && this->send_raw_frame(frame, frame_length)) {
+    ++this->display_status_frames_sent_;
+    return;
+  }
+  ++this->display_status_send_failures_;
 }
 
 void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {

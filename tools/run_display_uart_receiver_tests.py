@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import struct
+from pathlib import Path
 
 MAGIC = b"SPDP"
 VERSION = 1
@@ -43,8 +44,10 @@ FIELD_GRID_INPUT_FREQUENCY = 10011
 FIELD_GRID_INPUT_POWER_FACTOR = 10012
 FIELD_GRID_RAW_VOLTAGE = 10013
 FIELD_DISPLAY_ENABLED = 10014
+FIELD_DISPLAY_MAINTENANCE_WIFI_ACTUAL = 12001
 INVALID_I32 = -2147483648
 DEVICE_CONTROLLER_SYSTEM = 3
+REPO_ROOT = Path(__file__).resolve().parent.parent
 TRACKED_FIELDS = (
     FIELD_PV1_POWER,
     FIELD_BATTERY_SOC,
@@ -553,6 +556,16 @@ def test_connection_status_independent_per_device_via_receiver_state() -> None:
     assert connection_status(device2_has_snapshot, not rx.stale_for_device(2, now_ms=1000)) == "DISCONNECTED"
 
 
+def test_display_status_transmitter_uses_display_device_id_and_real_field() -> None:
+    source = (REPO_ROOT / "components" / "display_protocol_uart" / "display_protocol_uart.cpp").read_text(
+        encoding="utf-8"
+    )
+    assert "status.deviceId = ESPTelemetry::kDeviceIdDisplay" in source
+    assert "FieldIdDisplayMaintenanceWifiActual" in source
+    assert "encodeTelemetry(status, ESPTelemetry::kMessageTypeStatus" in source
+    assert "send_raw_frame(frame, frame_length)" in source
+
+
 def main() -> int:
     tests = [
         test_valid_snapshot,
@@ -589,6 +602,7 @@ def main() -> int:
         test_connection_status_connected_when_fresh,
         test_connection_status_stale_when_timed_out,
         test_connection_status_independent_per_device_via_receiver_state,
+        test_display_status_transmitter_uses_display_device_id_and_real_field,
     ]
     for test in tests:
         test()

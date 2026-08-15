@@ -10,6 +10,7 @@
 #include "esphome/core/component.h"
 
 #include "ESPTelemetry.h"
+#include "TelemetryPeerManager.h"
 #include "display_protocol_entity_metadata.generated.h"
 
 namespace esphome {
@@ -207,6 +208,7 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now);
   void publish_system_telemetry_field_(uint16_t field_id, int32_t value);
   void publish_diagnostics_(uint32_t now);
+  void send_display_status_(uint32_t now);
   void update_stale_state_(uint32_t now);
   // Stage 38 source-freshness still comes from the Gateway's own per-frame
   // cache-valid flags and is published as diagnostics. The offline HMI keeps
@@ -249,6 +251,8 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   bool system_link_fresh_ = false;
   uint32_t last_system_frame_ms_ = 0;
   uint32_t last_publish_ms_ = 0;
+  uint32_t last_display_status_tx_ms_ = 0;
+  uint16_t next_display_status_sequence_ = 0;
   uint32_t stale_timeout_ms_ = 5000;
   bool trace_frames_ = false;
   uint8_t rx_gpio_ = 44;
@@ -264,6 +268,8 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   uint32_t decode_errors_ = 0;
   uint32_t sequence_gaps_ = 0;
   uint32_t duplicate_frames_ = 0;
+  uint32_t display_status_frames_sent_ = 0;
+  uint32_t display_status_send_failures_ = 0;
 
   sensor::Sensor *pv1_power_sensor_[kDeviceCount] = {nullptr, nullptr};
   sensor::Sensor *pv2_power_sensor_[kDeviceCount] = {nullptr, nullptr};
