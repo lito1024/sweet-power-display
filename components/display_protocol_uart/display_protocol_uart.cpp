@@ -673,6 +673,15 @@ void DisplayProtocolUARTComponent::publish_system_telemetry_field_(uint16_t fiel
         this->publish_binary_(this->display_enabled_sensor_, value != 0);
       }
       return;
+    case ESPTelemetry::FieldIdDisplayMaintenanceWifiEnabled:
+      if (value != static_cast<int32_t>(ESPTelemetry::kInvalidI32)) {
+        const bool requested = value != 0;
+        if (requested != this->last_display_maintenance_wifi_request_) {
+          this->last_display_maintenance_wifi_request_ = requested;
+          this->publish_binary_(this->display_maintenance_wifi_requested_sensor_, requested);
+        }
+      }
+      return;
     default:
       ESP_LOGD(TAG, "Ignoring unknown Controller/system field id %u", static_cast<unsigned int>(field_id));
       return;
@@ -705,7 +714,8 @@ void DisplayProtocolUARTComponent::send_display_status_(uint32_t now) {
   status.group = ESPTelemetry::TelemetryGroup::Status;
   status.flags = ESPTelemetry::TelemetryGroupFlagValuesValid | ESPTelemetry::TelemetryGroupFlagCacheValid;
   status.fieldCount = 1;
-  status.fields[0] = {ESPTelemetry::FieldIdDisplayMaintenanceWifiActual, 0};
+  status.fields[0] = {ESPTelemetry::FieldIdDisplayMaintenanceWifiActual,
+                      this->display_maintenance_wifi_actual_ ? 1 : 0};
 
   uint8_t frame[ESPTelemetry::kMaxFrameSize];
   const size_t frame_length =
@@ -716,6 +726,16 @@ void DisplayProtocolUARTComponent::send_display_status_(uint32_t now) {
     return;
   }
   ++this->display_status_send_failures_;
+}
+
+void DisplayProtocolUARTComponent::set_display_maintenance_wifi_actual(bool enabled) {
+  const bool changed = this->display_maintenance_wifi_actual_ != enabled;
+  this->display_maintenance_wifi_actual_ = enabled;
+  this->last_display_status_tx_ms_ = 0;
+  this->send_display_status_(millis());
+  if (changed) {
+    ESP_LOGI(TAG, "display_maintenance_wifi_actual -> %s", enabled ? "ON" : "OFF");
+  }
 }
 
 void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {

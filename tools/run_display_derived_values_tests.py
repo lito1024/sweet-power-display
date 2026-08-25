@@ -477,14 +477,23 @@ def test_grid_voltage_color_thresholds() -> None:
     assert grid_voltage_color(NAN) == "white"
 
 
-def test_no_sim_or_home_assistant_or_network_role_in_display_yaml() -> None:
+def test_display_maintenance_networking_is_boot_disabled_and_minimal() -> None:
     text = YAML_PATH.read_text(encoding="utf-8").lower()
     assert "sim_" not in text
     assert "sim " not in text
-    assert "\nwifi:" not in text
-    assert "\napi:" not in text
-    assert "\nota:" not in text
+    assert "\nwifi:" in text
+    assert "enable_on_boot: false" in text
+    assert "reboot_timeout: 0s" in text
+    assert "\napi:" in text
+    assert "\nota:" in text
     assert "\nweb_server:" not in text
+    assert "\ncaptive_portal:" not in text
+    assert "wifi.enable" in text
+    assert "wifi.disable" in text
+    assert "maintenance_wifi_enabled) = false" in text
+    assert "set_display_maintenance_wifi_actual(false)" in text
+    assert "display_maintenance_wifi_requested:" in text
+    assert "maintenance_ota_active" in text
 
 
 def test_display_enabled_controls_only_existing_ch422g_enable_lines() -> None:
@@ -691,7 +700,7 @@ def main() -> int:
         test_lower_parameter_columns_use_controller_and_inverter1_only,
         test_export_limit_watts_are_not_written_to_soc_label,
         test_grid_voltage_color_thresholds,
-        test_no_sim_or_home_assistant_or_network_role_in_display_yaml,
+        test_display_maintenance_networking_is_boot_disabled_and_minimal,
         test_display_enabled_controls_only_existing_ch422g_enable_lines,
         test_display_enabled_is_received_as_controller_system_binary_state,
         test_controller_stale_does_not_publish_display_enabled_false,

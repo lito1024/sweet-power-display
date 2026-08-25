@@ -191,6 +191,9 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_grid_input_power_factor_sensor(sensor::Sensor *sensor) { this->grid_input_power_factor_sensor_ = sensor; }
   void set_grid_raw_voltage_sensor(sensor::Sensor *sensor) { this->grid_raw_voltage_sensor_ = sensor; }
   void set_display_enabled_sensor(binary_sensor::BinarySensor *sensor) { this->display_enabled_sensor_ = sensor; }
+  void set_display_maintenance_wifi_requested_sensor(binary_sensor::BinarySensor *sensor) { this->display_maintenance_wifi_requested_sensor_ = sensor; }
+  void set_display_maintenance_wifi_actual(bool enabled);
+  bool display_maintenance_wifi_actual() const { return this->display_maintenance_wifi_actual_; }
 
   bool send_raw_frame(const uint8_t *data, size_t length);
 
@@ -253,6 +256,8 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   uint32_t last_publish_ms_ = 0;
   uint32_t last_display_status_tx_ms_ = 0;
   uint16_t next_display_status_sequence_ = 0;
+  bool display_maintenance_wifi_actual_ = false;
+  bool last_display_maintenance_wifi_request_ = true;
   uint32_t stale_timeout_ms_ = 5000;
   bool trace_frames_ = false;
   uint8_t rx_gpio_ = 44;
@@ -408,6 +413,7 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *grid_input_power_factor_sensor_ = nullptr;
   sensor::Sensor *grid_raw_voltage_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_enabled_sensor_ = nullptr;
+  binary_sensor::BinarySensor *display_maintenance_wifi_requested_sensor_ = nullptr;
 };
 
 }  // namespace display_protocol_uart

@@ -18,6 +18,7 @@ CONF_FEED_IN_GRID_ENABLED = "feed_in_grid_enabled"
 # register as feed_in_grid_enabled above (which failed the same test).
 CONF_ZERO_EXPORT_ENABLED = "zero_export_enabled"
 CONF_DISPLAY_ENABLED = "display_enabled"
+CONF_DISPLAY_MAINTENANCE_WIFI_REQUESTED = "display_maintenance_wifi_requested"
 
 BINARY_SENSOR_MAP = {
     CONF_GATEWAY_DATA_FRESH: ("set_gateway_data_fresh_sensor", DEVICE_CLASS_CONNECTIVITY),
@@ -32,6 +33,7 @@ BINARY_SENSOR_MAP = {
 
 SYSTEM_BINARY_SENSOR_MAP = {
     CONF_DISPLAY_ENABLED: ("set_display_enabled_sensor", None),
+    CONF_DISPLAY_MAINTENANCE_WIFI_REQUESTED: ("set_display_maintenance_wifi_requested_sensor", None),
 }
 
 

@@ -44,6 +44,7 @@ FIELD_GRID_INPUT_FREQUENCY = 10011
 FIELD_GRID_INPUT_POWER_FACTOR = 10012
 FIELD_GRID_RAW_VOLTAGE = 10013
 FIELD_DISPLAY_ENABLED = 10014
+FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED = 10015
 FIELD_DISPLAY_MAINTENANCE_WIFI_ACTUAL = 12001
 INVALID_I32 = -2147483648
 DEVICE_CONTROLLER_SYSTEM = 3
@@ -75,6 +76,7 @@ SYSTEM_FIELDS = (
     FIELD_GRID_INPUT_POWER_FACTOR,
     FIELD_GRID_RAW_VOLTAGE,
     FIELD_DISPLAY_ENABLED,
+    FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED,
 )
 
 
@@ -369,6 +371,20 @@ def test_controller_display_enabled_on_off_reaches_system_state() -> None:
     assert rx.system_values[FIELD_DISPLAY_ENABLED] == 0
 
 
+def test_controller_display_maintenance_wifi_request_reaches_system_state() -> None:
+    rx = Receiver()
+    rx.feed(
+        encode_v2(1, [(FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED, 1)], device_id=DEVICE_CONTROLLER_SYSTEM),
+        now_ms=1000,
+    )
+    assert rx.system_values[FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED] == 1
+    rx.feed(
+        encode_v2(2, [(FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED, 0)], device_id=DEVICE_CONTROLLER_SYSTEM),
+        now_ms=2000,
+    )
+    assert rx.system_values[FIELD_DISPLAY_MAINTENANCE_WIFI_ENABLED] == 0
+
+
 def test_controller_loss_does_not_force_display_enabled_off() -> None:
     rx = Receiver()
     rx.feed(encode_v2(1, [(FIELD_DISPLAY_ENABLED, 0)], device_id=DEVICE_CONTROLLER_SYSTEM), now_ms=1000)
@@ -562,8 +578,27 @@ def test_display_status_transmitter_uses_display_device_id_and_real_field() -> N
     )
     assert "status.deviceId = ESPTelemetry::kDeviceIdDisplay" in source
     assert "FieldIdDisplayMaintenanceWifiActual" in source
+    assert "this->display_maintenance_wifi_actual_ ? 1 : 0" in source
+    assert "FieldIdDisplayMaintenanceWifiActual, 0" not in source
     assert "encodeTelemetry(status, ESPTelemetry::kMessageTypeStatus" in source
     assert "send_raw_frame(frame, frame_length)" in source
+
+
+def test_display_maintenance_request_is_edge_filtered_for_reboot_safety() -> None:
+    source = (REPO_ROOT / "components" / "display_protocol_uart" / "display_protocol_uart.cpp").read_text(
+        encoding="utf-8"
+    )
+    header = (REPO_ROOT / "components" / "display_protocol_uart" / "display_protocol_uart.h").read_text(
+        encoding="utf-8"
+    )
+    binary_sensor = (REPO_ROOT / "components" / "display_protocol_uart" / "binary_sensor.py").read_text(
+        encoding="utf-8"
+    )
+    assert "FieldIdDisplayMaintenanceWifiEnabled" in source
+    assert "requested != this->last_display_maintenance_wifi_request_" in source
+    assert "bool last_display_maintenance_wifi_request_ = true" in header
+    assert "set_display_maintenance_wifi_requested_sensor" in header
+    assert 'CONF_DISPLAY_MAINTENANCE_WIFI_REQUESTED = "display_maintenance_wifi_requested"' in binary_sensor
 
 
 def main() -> int:
@@ -586,6 +621,7 @@ def main() -> int:
         test_diagnostics_independent_stream_from_fast,
         test_controller_system_device_id_3_is_accepted,
         test_controller_display_enabled_on_off_reaches_system_state,
+        test_controller_display_maintenance_wifi_request_reaches_system_state,
         test_controller_loss_does_not_force_display_enabled_off,
         test_all_stage39b_system_fields_decode,
         test_controller_invalid_value_blanks_only_that_system_field,
@@ -603,6 +639,7 @@ def main() -> int:
         test_connection_status_stale_when_timed_out,
         test_connection_status_independent_per_device_via_receiver_state,
         test_display_status_transmitter_uses_display_device_id_and_real_field,
+        test_display_maintenance_request_is_edge_filtered_for_reboot_safety,
     ]
     for test in tests:
         test()
