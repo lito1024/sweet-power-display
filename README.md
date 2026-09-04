@@ -1,9 +1,11 @@
 # Sweet Power Display
 
 **Sweet POWER v1.0.0** ("Sweet POWER 1.0") -- architecture frozen. This
-repository also publishes the `display_protocol_uart` and
-`display_protocol_espnow` ESPHome external components used by the rest of
-the Sweet Power project.
+repository also publishes the `display_protocol_uart` ESPHome external
+component used by the rest of the Sweet Power project. Stage 42G removed
+ESP-NOW from the project; the `display_protocol_espnow` component (unused
+by production, which has always used `display_protocol_uart`) was removed
+along with it.
 
 ESPHome firmware for the Waveshare ESP32-S3-Touch-LCD-7 Sweet POWER dashboard.
 

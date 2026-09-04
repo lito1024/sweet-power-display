@@ -743,7 +743,7 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   // never affect the other's freshness state.
   //
   // Transport-link fallback: no frame of any kind arrived within
-  // stale_timeout_ms_ (Gateway/Bridge/ESP-NOW itself is unreachable). Short
+  // stale_timeout_ms_ (Gateway/Bridge/UART link itself is unreachable). Short
   // Gateway source/cache gaps may set data_fresh_ false, but the offline HMI
   // keeps last valid readings until this transport timeout trips.
   for (uint8_t device_index = 0; device_index < kDeviceCount; ++device_index) {

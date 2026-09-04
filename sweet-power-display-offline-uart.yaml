@@ -125,11 +125,11 @@ uart:
   id: gateway_uart
   # Waveshare Rev1.2 routes the external UART connector through the UART
   # selection switch to ESP_RXD/ESP_TXD. This is the ONLY telemetry source
-  # -- see stages/Stage34.md. The Display remains the only UART receiver
-  # in the architecture (LuxPower -> Gateway(s) -> ESP-NOW -> Bridge ->
-  # UART -> Display); Stage 34 also added an independent ESP-NOW fan-out
-  # from the Bridge to a separate Controller board, which does not change
-  # the Display's UART-only role.
+  # -- see stages/Stage34.md. The Display remains the only UART receiver in
+  # the architecture (LuxPower -> Gateway(s) -> UDP -> Bridge -> UART ->
+  # Display); Stage 34 also added an independent fan-out from the Bridge to
+  # a separate Controller board (UDP as of Stage 42G), which does not
+  # change the Display's UART-only role.
   rx_pin: GPIO44
   tx_pin: GPIO43
   baud_rate: 230400

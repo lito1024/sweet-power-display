@@ -212,7 +212,7 @@ def test_v2_mixed_group_recovery_requires_both_bits_fresh_again() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 8. Transport link itself dead (Gateway/Bridge/ESP-NOW down): existing
+# 8. Transport link itself dead (Gateway/Bridge/UART down): existing
 #    arrival-timeout behavior must still work, independent of source flags
 # ---------------------------------------------------------------------------
 
