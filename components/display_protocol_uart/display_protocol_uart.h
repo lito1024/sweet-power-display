@@ -192,6 +192,11 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_grid_raw_voltage_sensor(sensor::Sensor *sensor) { this->grid_raw_voltage_sensor_ = sensor; }
   void set_display_enabled_sensor(binary_sensor::BinarySensor *sensor) { this->display_enabled_sensor_ = sensor; }
   void set_display_maintenance_wifi_requested_sensor(binary_sensor::BinarySensor *sensor) { this->display_maintenance_wifi_requested_sensor_ = sensor; }
+  // Exposes the existing internal system_link_fresh_ state (Controller System
+  // device_id frames arriving over this UART link within stale_timeout_ms_) --
+  // previously tracked but never published. Used for the top-right "SPC"
+  // status icon.
+  void set_system_link_connected_sensor(binary_sensor::BinarySensor *sensor) { this->system_link_connected_sensor_ = sensor; }
   void set_display_maintenance_wifi_actual(bool enabled);
   bool display_maintenance_wifi_actual() const { return this->display_maintenance_wifi_actual_; }
 
@@ -414,6 +419,7 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *grid_raw_voltage_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_enabled_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_maintenance_wifi_requested_sensor_ = nullptr;
+  binary_sensor::BinarySensor *system_link_connected_sensor_ = nullptr;
 };
 
 }  // namespace display_protocol_uart

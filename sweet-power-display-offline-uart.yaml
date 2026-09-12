@@ -277,7 +277,7 @@ lvgl:
         widgets:
           - obj:
               id: wifi_status_indicator
-              width: 64
+              width: 140
               height: 56
               align: TOP_RIGHT
               x: -8
@@ -303,6 +303,28 @@ lvgl:
                     align: TOP_RIGHT
                     x: -2
                     y: 0
+                # Testing aid: Controller<->Display UART link status ("SPC" =
+                # Sweet POWER Controller), placed in the SAME floating
+                # container as the Wi-Fi icon (a standalone second floating
+                # object did not position correctly), anchored TOP_RIGHT with
+                # a larger x offset so it sits immediately left of the Wi-Fi
+                # glyph with a minimal gap. Same icon font size
+                # (montserrat_22). Green = Controller System (device_id 3)
+                # frames currently fresh over this UART link; red = not
+                # connected/stale, including the boot-default before the
+                # first frame ever arrives. Driven by the
+                # display_protocol_uart `system_link_connected` binary_sensor
+                # below -- see its on_state lambda. Container width widened
+                # from 64 to 140 (transparent background, so the extra space
+                # is invisible) to fit both labels without clipping.
+                - label:
+                    id: spc_icon_label
+                    text: "SPC"
+                    text_font: montserrat_22
+                    text_color: 0xCC0000
+                    align: TOP_RIGHT
+                    x: -46
+                    y: 1
           - label:
               text: "SWEET POWER"
               text_font: montserrat_22
@@ -992,6 +1014,19 @@ sensor:
 binary_sensor:
   - platform: display_protocol_uart
     display_protocol_uart_id: gateway_receiver
+    system_link_connected:
+      id: system_link_connected_sensor
+      internal: true
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              if (x) {
+                lv_obj_set_style_text_color(id(spc_icon_label), lv_color_hex(0x00CC44), 0);
+              } else {
+                lv_obj_set_style_text_color(id(spc_icon_label), lv_color_hex(0xCC0000), 0);
+              }
+              lv_obj_send_event(id(spc_icon_label), lvgl::lv_update_event, nullptr);
     display_enabled:
       id: display_enabled_sensor
       internal: true

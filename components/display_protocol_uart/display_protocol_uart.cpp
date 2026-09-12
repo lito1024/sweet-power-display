@@ -24,6 +24,12 @@ void DisplayProtocolUARTComponent::setup() {
            "Protocol versions: v%u snapshot, v%u grouped telemetry",
            static_cast<unsigned int>(ESPTelemetry::kVersion),
            static_cast<unsigned int>(ESPTelemetry::kVersionV2));
+  // Explicit boot-safe state: no Controller System frame has been received
+  // yet, so the link is not connected -- publish this immediately rather
+  // than leaving the sensor "unknown" until the first frame arrives or the
+  // first stale-check cycle (which only fires once have_system_frame_ is
+  // already true, i.e. never on its own at boot).
+  this->publish_binary_(this->system_link_connected_sensor_, false);
 }
 
 void DisplayProtocolUARTComponent::loop() {
@@ -264,6 +270,7 @@ void DisplayProtocolUARTComponent::handle_system_telemetry_frame_(const ESPTelem
              static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
   }
   this->system_link_fresh_ = true;
+  this->publish_binary_(this->system_link_connected_sensor_, true);
 
   for (uint8_t i = 0; i < payload.fieldCount; ++i) {
     this->publish_system_telemetry_field_(payload.fields[i].fieldId, payload.fields[i].value);
@@ -766,6 +773,7 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   if (this->have_system_frame_ && this->system_link_fresh_ &&
       (now - this->last_system_frame_ms_) > this->stale_timeout_ms_) {
     this->system_link_fresh_ = false;
+    this->publish_binary_(this->system_link_connected_sensor_, false);
     this->mark_system_stale_();
   }
 }
