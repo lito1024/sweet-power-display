@@ -30,6 +30,12 @@ void DisplayProtocolUARTComponent::setup() {
   // first stale-check cycle (which only fires once have_system_frame_ is
   // already true, i.e. never on its own at boot).
   this->publish_binary_(this->system_link_connected_sensor_, false);
+  // Stage 44H boot-safe default: HA GREY until real Controller telemetry
+  // proves both link-fresh and HA-connected. update_ha_connected_display_()
+  // is not called here to avoid depending on member initialization order --
+  // this publishes the equivalent (spc_link_fresh_/ha_reported_connected_
+  // both default-construct to false) directly.
+  this->publish_binary_(this->ha_connected_sensor_, false);
 }
 
 void DisplayProtocolUARTComponent::loop() {
@@ -271,6 +277,11 @@ void DisplayProtocolUARTComponent::handle_system_telemetry_frame_(const ESPTelem
   }
   this->system_link_fresh_ = true;
   this->publish_binary_(this->system_link_connected_sensor_, true);
+  // Stage 44H: independent 3s SPC watchdog -- see spc_link_fresh_ comment.
+  if (!this->spc_link_fresh_) {
+    this->spc_link_fresh_ = true;
+    this->update_ha_connected_display_();
+  }
 
   for (uint8_t i = 0; i < payload.fieldCount; ++i) {
     this->publish_system_telemetry_field_(payload.fields[i].fieldId, payload.fields[i].value);
@@ -689,6 +700,12 @@ void DisplayProtocolUARTComponent::publish_system_telemetry_field_(uint16_t fiel
         }
       }
       return;
+    case ESPTelemetry::FieldIdHomeAssistantConnected:
+      if (value != static_cast<int32_t>(ESPTelemetry::kInvalidI32)) {
+        this->ha_reported_connected_ = value != 0;
+        this->update_ha_connected_display_();
+      }
+      return;
     default:
       ESP_LOGD(TAG, "Ignoring unknown Controller/system field id %u", static_cast<unsigned int>(field_id));
       return;
@@ -773,9 +790,29 @@ void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   if (this->have_system_frame_ && this->system_link_fresh_ &&
       (now - this->last_system_frame_ms_) > this->stale_timeout_ms_) {
     this->system_link_fresh_ = false;
-    this->publish_binary_(this->system_link_connected_sensor_, false);
     this->mark_system_stale_();
   }
+
+  // Stage 44H: independent 3s SPC/HA icon watchdog -- deliberately separate
+  // from the stale_timeout_ms_ check above (see spc_link_fresh_ comment in
+  // the header). Wrap-safe: now and last_system_frame_ms_ are both plain
+  // millis() values, and unsigned subtraction is correct across a wrap as
+  // long as the true elapsed time is under ~49.7 days.
+  if (this->have_system_frame_ && this->spc_link_fresh_ &&
+      (now - this->last_system_frame_ms_) >= kSpcLinkTimeoutMs) {
+    this->spc_link_fresh_ = false;
+    this->publish_binary_(this->system_link_connected_sensor_, false);
+    this->update_ha_connected_display_();
+  }
+}
+
+void DisplayProtocolUARTComponent::update_ha_connected_display_() {
+  // Stage 44H fail-safe requirement: a Controller link that has gone stale
+  // must never continue showing a stale "HA connected" (blue) state, even if
+  // the last reported value was true -- so the effective state is always the
+  // AND of "link fresh" and "last reported value", not the reported value
+  // alone.
+  this->publish_binary_(this->ha_connected_sensor_, this->spc_link_fresh_ && this->ha_reported_connected_);
 }
 
 void DisplayProtocolUARTComponent::set_device_freshness_(uint8_t device_index, bool fresh) {

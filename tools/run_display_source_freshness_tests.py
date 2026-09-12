@@ -21,6 +21,8 @@ changes. See stages/Stage38.md.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 STALE_TIMEOUT_MS = 5000
 
 
@@ -251,6 +253,138 @@ def test_transport_alive_source_fresh_arrival_timeout_never_fires() -> None:
     assert dev.stale_transitions == 0
 
 
+# ---------------------------------------------------------------------------
+# Stage 44H: SPC ("Sweet POWER Controller" link) and effective Home Assistant
+# icon state. Deliberately a SEPARATE, independent 3000ms watchdog from
+# DeviceFreshnessSim/STALE_TIMEOUT_MS above -- that existing 5000ms model is
+# per-Gateway-device (Inverter 1/2) transport freshness and must not be
+# reused or altered for this. Mirrors handle_system_telemetry_frame_/
+# update_stale_state_/update_ha_connected_display_ in
+# display_protocol_uart.cpp -- keep in sync by hand if that logic changes.
+# ---------------------------------------------------------------------------
+
+SPC_LINK_TIMEOUT_MS = 3000
+
+
+class SpcHaSim:
+    """Mirrors spc_link_fresh_/ha_reported_connected_/effective HA state."""
+
+    def __init__(self) -> None:
+        self.have_system_frame = False
+        self.spc_link_fresh = False  # boot-safe default: RED
+        self.ha_reported_connected = False
+        self.last_system_frame_ms: int | None = None
+
+    @property
+    def spc_green(self) -> bool:
+        return self.spc_link_fresh
+
+    @property
+    def ha_effective_connected(self) -> bool:
+        # Mirrors update_ha_connected_display_(): AND, never the raw report
+        # alone -- a stale Controller link must never show stale "connected".
+        return self.spc_link_fresh and self.ha_reported_connected
+
+    def receive_system_frame(self, now_ms: int, ha_connected: bool | None = None) -> None:
+        # Mirrors handle_system_telemetry_frame_: every periodic Controller/
+        # System frame refreshes the timestamp and forces spc_link_fresh_
+        # true, regardless of whether this specific frame happens to carry
+        # the HA field (it always does in production -- see
+        # send_system_measurement_telemetry_ -- but the None case here
+        # proves the two are independently tracked).
+        self.have_system_frame = True
+        self.last_system_frame_ms = now_ms
+        self.spc_link_fresh = True
+        if ha_connected is not None:
+            self.ha_reported_connected = ha_connected
+
+    def tick(self, now_ms: int, timeout_ms: int = SPC_LINK_TIMEOUT_MS) -> None:
+        # Mirrors update_stale_state_'s dedicated SPC/HA block: >=, not >,
+        # per the required "no valid telemetry for >= 3000ms -> RED" spec.
+        if not self.have_system_frame or not self.spc_link_fresh:
+            return
+        assert self.last_system_frame_ms is not None
+        if (now_ms - self.last_system_frame_ms) >= timeout_ms:
+            self.spc_link_fresh = False
+
+
+def test_spc_boot_state_is_red() -> None:
+    sim = SpcHaSim()
+    assert sim.spc_green is False
+    assert sim.ha_effective_connected is False
+
+
+def test_spc_valid_frame_turns_green() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0)
+    assert sim.spc_green is True
+
+
+def test_spc_remains_green_under_3000ms() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0)
+    sim.tick(2999)
+    assert sim.spc_green is True
+
+
+def test_spc_turns_red_at_3000ms() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0)
+    sim.tick(3000)
+    assert sim.spc_green is False
+
+
+def test_spc_turns_green_again_after_new_frame_following_stale() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0)
+    sim.tick(3000)
+    assert sim.spc_green is False
+    sim.receive_system_frame(3050)
+    assert sim.spc_green is True
+
+
+def test_ha_blue_when_reported_connected_and_spc_fresh() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0, ha_connected=True)
+    assert sim.ha_effective_connected is True
+
+
+def test_ha_grey_when_reported_disconnected_and_spc_fresh() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0, ha_connected=False)
+    assert sim.ha_effective_connected is False
+
+
+def test_ha_grey_when_reported_connected_but_spc_stale() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0, ha_connected=True)
+    sim.tick(3000)
+    assert sim.spc_green is False
+    # Fail-safe requirement: stale link must never keep showing blue.
+    assert sim.ha_effective_connected is False
+
+
+def test_ha_reconnect_turns_blue_automatically() -> None:
+    sim = SpcHaSim()
+    sim.receive_system_frame(0, ha_connected=False)
+    assert sim.ha_effective_connected is False
+    sim.receive_system_frame(1000, ha_connected=True)
+    assert sim.ha_effective_connected is True
+
+
+def test_existing_wifi_indicator_unchanged_by_stage_44h() -> None:
+    # Stage 44H added HA/SPC labels into the same container but must not
+    # touch the Wi-Fi icon's own semantics/colors -- confirmed here at the
+    # YAML level rather than a runtime sim, since Wi-Fi status itself is
+    # driven by wifi.connected/on_connect/on_disconnect actions elsewhere.
+    yaml_path = Path(__file__).resolve().parent.parent / "sweet-power-display-offline-uart.yaml"
+    text = yaml_path.read_text(encoding="utf-8")
+    assert 'id: wifi_icon_label' in text
+    assert 'text: "\\uF1EB"' in text  # LV_SYMBOL_WIFI, unchanged glyph
+    assert "0x666666" in text  # disconnected/grey Wi-Fi color still present
+    assert "id: wifi_alert_label" in text
+
+
 def main() -> int:
     tests = [
         test_normal_v1_frame_marks_fresh,
@@ -264,6 +398,16 @@ def main() -> int:
         test_transport_link_dead_still_detected_by_arrival_timeout,
         test_transport_timeout_blanks_even_after_source_was_already_stale,
         test_transport_alive_source_fresh_arrival_timeout_never_fires,
+        test_spc_boot_state_is_red,
+        test_spc_valid_frame_turns_green,
+        test_spc_remains_green_under_3000ms,
+        test_spc_turns_red_at_3000ms,
+        test_spc_turns_green_again_after_new_frame_following_stale,
+        test_ha_blue_when_reported_connected_and_spc_fresh,
+        test_ha_grey_when_reported_disconnected_and_spc_fresh,
+        test_ha_grey_when_reported_connected_but_spc_stale,
+        test_ha_reconnect_turns_blue_automatically,
+        test_existing_wifi_indicator_unchanged_by_stage_44h,
     ]
     for test in tests:
         test()

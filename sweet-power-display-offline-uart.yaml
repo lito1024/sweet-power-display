@@ -277,7 +277,7 @@ lvgl:
         widgets:
           - obj:
               id: wifi_status_indicator
-              width: 140
+              width: 180
               height: 56
               align: TOP_RIGHT
               x: -8
@@ -324,6 +324,27 @@ lvgl:
                     text_color: 0xCC0000
                     align: TOP_RIGHT
                     x: -46
+                    y: 1
+                # Stage 44H: Home Assistant status icon, immediately left of
+                # "SPC" (final order HA | SPC | WiFi), same container/anchor
+                # approach as SPC above. LV_SYMBOL_HOME (a house glyph,
+                # U+F015) is used as the recognizable Home Assistant-style
+                # icon -- it is one of LVGL's built-in Montserrat symbol
+                # glyphs already compiled into this build (confirmed against
+                # this exact LVGL version's lv_symbol_def.h, same source as
+                # the Wi-Fi glyph above), so no new font/asset is needed.
+                # Blue = connected, grey = not connected/stale -- see the
+                # `ha_connected` binary_sensor below for the actual
+                # connected/fresh logic; this widget only renders it.
+                # Container widened 140 -> 180 (transparent background) for
+                # this third label.
+                - label:
+                    id: ha_icon_label
+                    text: ""
+                    text_font: montserrat_22
+                    text_color: 0x666666
+                    align: TOP_RIGHT
+                    x: -100
                     y: 1
           - label:
               text: "SWEET POWER"
@@ -1014,6 +1035,24 @@ sensor:
 binary_sensor:
   - platform: display_protocol_uart
     display_protocol_uart_id: gateway_receiver
+    # Stage 44H: effective Home Assistant connection status ("HA" icon,
+    # immediately left of "SPC"). Already the AND of Controller-reported
+    # state and SPC link freshness (see update_ha_connected_display_() in
+    # display_protocol_uart.cpp) -- this handler only has to render it.
+    # Blue = connected, grey = not connected (never red, per spec).
+    ha_connected:
+      id: ha_connected_sensor
+      internal: true
+      trigger_on_initial_state: true
+      on_state:
+        then:
+          - lambda: |-
+              if (x) {
+                lv_obj_set_style_text_color(id(ha_icon_label), lv_color_hex(0x41BDF5), 0);
+              } else {
+                lv_obj_set_style_text_color(id(ha_icon_label), lv_color_hex(0x666666), 0);
+              }
+              lv_obj_send_event(id(ha_icon_label), lvgl::lv_update_event, nullptr);
     system_link_connected:
       id: system_link_connected_sensor
       internal: true

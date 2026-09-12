@@ -197,6 +197,10 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   // previously tracked but never published. Used for the top-right "SPC"
   // status icon.
   void set_system_link_connected_sensor(binary_sensor::BinarySensor *sensor) { this->system_link_connected_sensor_ = sensor; }
+  // Stage 44H: effective Home Assistant status for the Display's "HA" icon --
+  // see ha_reported_connected_/update_ha_connected_display_() for why this is
+  // not simply the raw Controller-reported value.
+  void set_ha_connected_sensor(binary_sensor::BinarySensor *sensor) { this->ha_connected_sensor_ = sensor; }
   void set_display_maintenance_wifi_actual(bool enabled);
   bool display_maintenance_wifi_actual() const { return this->display_maintenance_wifi_actual_; }
 
@@ -258,6 +262,25 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   bool have_system_frame_ = false;
   bool system_link_fresh_ = false;
   uint32_t last_system_frame_ms_ = 0;
+  // Stage 44H: dedicated, independent freshness watchdog for the Display's
+  // "SPC" status icon only -- deliberately NOT the same as system_link_fresh_
+  // above (which stays governed by the existing stale_timeout_ms_/60s config
+  // and continues to gate mark_system_stale_()'s NaN-blanking of
+  // system_output_*/grid_input_* sensors, unchanged). The physical test
+  // showed the icon needed to react in ~3s, but that timeout must not be
+  // reused for -- or forced onto -- the existing, possibly-elsewhere-relied
+  // on stale semantics. Reuses the same last_system_frame_ms_ timestamp
+  // (both watchdogs measure "time since last Controller/System frame", just
+  // with different thresholds/actions) rather than tracking a second,
+  // redundant timestamp.
+  bool spc_link_fresh_ = false;
+  static constexpr uint32_t kSpcLinkTimeoutMs = 3000;
+  // Raw value last reported by the Controller in FieldIdHomeAssistantConnected,
+  // independent of whether the link itself is currently fresh. The actually
+  // *displayed* HA state is the AND of this with spc_link_fresh_ (see
+  // update_ha_connected_display_()) so a stale Controller link can never
+  // continue showing a stale "HA connected" indication.
+  bool ha_reported_connected_ = false;
   uint32_t last_publish_ms_ = 0;
   uint32_t last_display_status_tx_ms_ = 0;
   uint16_t next_display_status_sequence_ = 0;
@@ -420,6 +443,12 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   binary_sensor::BinarySensor *display_enabled_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_maintenance_wifi_requested_sensor_ = nullptr;
   binary_sensor::BinarySensor *system_link_connected_sensor_ = nullptr;
+  binary_sensor::BinarySensor *ha_connected_sensor_ = nullptr;
+  // Stage 44H: recomputes and (if changed) publishes the effective HA state
+  // (spc_link_fresh_ AND ha_reported_connected_). Called whenever either
+  // input can change: a new Home Assistant field value arrives, or the SPC
+  // link itself becomes fresh/stale.
+  void update_ha_connected_display_();
 };
 
 }  // namespace display_protocol_uart
