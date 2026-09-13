@@ -577,13 +577,23 @@ def test_header_status_is_driven_by_gateway_snapshot_age_in_yaml() -> None:
     assert text.count("lv_label_set_text(id(header2_label)") == 1
 
 
-def test_no_icon_image_assets_declared_in_yaml() -> None:
-    # Stage 37 design feedback: icons were removed in favor of a plain
-    # recolor-markup text label -- guard against silently reintroducing
-    # image: platform usage/lv_image_set_src.
+def test_lxp_headers_still_use_recolor_text_not_icon_images() -> None:
+    # Stage 37 design feedback: the LXP1/LXP2 inverter status headers were
+    # switched from image-based icons to a plain recolor-markup text label
+    # -- guard against silently reintroducing the unused pictures/LPX_*.png
+    # icon assets for THAT specific feature. Stage 44H (icon revision)
+    # legitimately introduced `image:`/lv_img_set_src for an unrelated
+    # feature (the Home Assistant status icon, an official-logo bitmap), so
+    # this test no longer bans image: usage outright -- it checks only that
+    # the LXP header regression hasn't come back.
     text = YAML_PATH.read_text(encoding="utf-8")
-    assert "\nimage:" not in text
-    assert "lv_image_set_src(" not in text
+    assert 'id: header1_label, text: "LXP1 --"' in text
+    assert 'id: header2_label, text: "LXP2 --"' in text
+    assert "recolor: true" in text
+    assert "LPX_1_ON.png" not in text
+    assert "LPX_1_OFF.png" not in text
+    assert "LPX_2_ON.png" not in text
+    assert "LPX_2_OFF.png" not in text
 
 
 # ---------------------------------------------------------------------------
@@ -710,7 +720,7 @@ def main() -> int:
         test_header_status_off_after_one_minute_with_timer,
         test_header_status_switches_by_packet_age,
         test_header_status_is_driven_by_gateway_snapshot_age_in_yaml,
-        test_no_icon_image_assets_declared_in_yaml,
+        test_lxp_headers_still_use_recolor_text_not_icon_images,
         test_initial_state_every_derived_value_is_nan,
         test_initial_state_renders_as_dashes_not_zero,
         test_mockup_scenario_end_to_end,

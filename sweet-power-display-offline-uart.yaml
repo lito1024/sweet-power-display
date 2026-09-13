@@ -154,6 +154,25 @@ display_protocol_uart:
   stale_timeout: 60s
   trace_frames: false
 
+# Stage 44H (icon revision): official Home Assistant logo, two pre-colored
+# variants supplied by the user as SVG files (pictures/home-assistant-*.svg),
+# replacing the earlier LV_SYMBOL_HOME glyph placeholder. ESPHome rasterizes
+# SVG sources at compile time (via resvg_py, confirmed present in this
+# environment) into RGB565+alpha bitmaps for LVGL -- no external conversion
+# step needed. blue = HA connected, gray = not connected; selected at
+# runtime by the `ha_connected` binary_sensor below via lv_img_set_src.
+image:
+  - id: ha_icon_blue
+    file: pictures/home-assistant-blue.svg
+    resize: 24x24
+    type: RGB565
+    transparency: alpha_channel
+  - id: ha_icon_gray
+    file: pictures/home-assistant-gray.svg
+    resize: 24x24
+    type: RGB565
+    transparency: alpha_channel
+
 display:
   - platform: mipi_rgb
     model: ESP32-S3-TOUCH-LCD-7-800X480
@@ -327,22 +346,20 @@ lvgl:
                     y: 1
                 # Stage 44H: Home Assistant status icon, immediately left of
                 # "SPC" (final order HA | SPC | WiFi), same container/anchor
-                # approach as SPC above. LV_SYMBOL_HOME (a house glyph,
-                # U+F015) is used as the recognizable Home Assistant-style
-                # icon -- it is one of LVGL's built-in Montserrat symbol
-                # glyphs already compiled into this build (confirmed against
-                # this exact LVGL version's lv_symbol_def.h, same source as
-                # the Wi-Fi glyph above), so no new font/asset is needed.
-                # Blue = connected, grey = not connected/stale -- see the
+                # approach as SPC above. Originally the LV_SYMBOL_HOME glyph;
+                # replaced with the official Home Assistant logo (two
+                # pre-colored SVG variants under pictures/, see the `image:`
+                # block above) for a recognizable branded icon. Blue =
+                # connected, grey = not connected/stale -- see the
                 # `ha_connected` binary_sensor below for the actual
-                # connected/fresh logic; this widget only renders it.
+                # connected/fresh logic, which swaps `src` between
+                # ha_icon_blue/ha_icon_gray via lv_img_set_src; this widget
+                # only renders whichever image is currently selected.
                 # Container widened 140 -> 180 (transparent background) for
-                # this third label.
-                - label:
-                    id: ha_icon_label
-                    text: ""
-                    text_font: montserrat_22
-                    text_color: 0x666666
+                # this third icon.
+                - image:
+                    id: ha_icon_img
+                    src: ha_icon_gray
                     align: TOP_RIGHT
                     x: -100
                     y: 1
@@ -1039,7 +1056,10 @@ binary_sensor:
     # immediately left of "SPC"). Already the AND of Controller-reported
     # state and SPC link freshness (see update_ha_connected_display_() in
     # display_protocol_uart.cpp) -- this handler only has to render it.
-    # Blue = connected, grey = not connected (never red, per spec).
+    # Blue = connected, grey = not connected (never red, per spec). Icon
+    # revision: swaps the ha_icon_img widget's source between the two
+    # official-logo bitmaps (ha_icon_blue/ha_icon_gray, see the `image:`
+    # block near the top of this file) instead of recoloring a glyph.
     ha_connected:
       id: ha_connected_sensor
       internal: true
@@ -1048,11 +1068,11 @@ binary_sensor:
         then:
           - lambda: |-
               if (x) {
-                lv_obj_set_style_text_color(id(ha_icon_label), lv_color_hex(0x41BDF5), 0);
+                lv_img_set_src(id(ha_icon_img), id(ha_icon_blue));
               } else {
-                lv_obj_set_style_text_color(id(ha_icon_label), lv_color_hex(0x666666), 0);
+                lv_img_set_src(id(ha_icon_img), id(ha_icon_gray));
               }
-              lv_obj_send_event(id(ha_icon_label), lvgl::lv_update_event, nullptr);
+              lv_obj_send_event(id(ha_icon_img), lvgl::lv_update_event, nullptr);
     system_link_connected:
       id: system_link_connected_sensor
       internal: true

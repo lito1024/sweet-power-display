@@ -385,6 +385,24 @@ def test_existing_wifi_indicator_unchanged_by_stage_44h() -> None:
     assert "id: wifi_alert_label" in text
 
 
+def test_ha_icon_uses_image_widgets_not_glyph() -> None:
+    # Icon revision: the "HA" icon was switched from an LV_SYMBOL_HOME glyph
+    # (recolored text) to the official Home Assistant logo, rasterized at
+    # compile time from two user-supplied SVG files under pictures/. Confirm
+    # the glyph-based label is gone and the image-widget wiring is present.
+    yaml_path = Path(__file__).resolve().parent.parent / "sweet-power-display-offline-uart.yaml"
+    text = yaml_path.read_text(encoding="utf-8")
+    assert "id: ha_icon_label" not in text  # old glyph label fully removed
+    assert "id: ha_icon_img" in text
+    assert "src: ha_icon_gray" in text  # boot-safe default source
+    assert "id: ha_icon_blue" in text
+    assert "id: ha_icon_gray" in text
+    assert "pictures/home-assistant-blue.svg" in text
+    assert "pictures/home-assistant-gray.svg" in text
+    assert "lv_img_set_src(id(ha_icon_img), id(ha_icon_blue))" in text
+    assert "lv_img_set_src(id(ha_icon_img), id(ha_icon_gray))" in text
+
+
 def main() -> int:
     tests = [
         test_normal_v1_frame_marks_fresh,
@@ -408,6 +426,7 @@ def main() -> int:
         test_ha_grey_when_reported_connected_but_spc_stale,
         test_ha_reconnect_turns_blue_automatically,
         test_existing_wifi_indicator_unchanged_by_stage_44h,
+        test_ha_icon_uses_image_widgets_not_glyph,
     ]
     for test in tests:
         test()
