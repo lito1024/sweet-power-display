@@ -172,6 +172,25 @@ image:
     resize: 24x24
     type: RGB565
     transparency: alpha_channel
+  # Icon revision: the "SPC" text label (green/red recolor) was replaced
+  # with the Sweet POWER Controller house+bolt mark, cropped from the SPC
+  # brand logo (pictures/../../sweet-power-controller/icons/SPC.svg) with
+  # the wordmark removed -- at 24x24 the full logo's lettering is
+  # illegible, same reasoning as the HA icon above. Same rasterize-at-
+  # compile-time approach, same 24x24 size as the HA icon. Yellow =
+  # Controller link fresh; gray = not connected/stale -- selected at
+  # runtime by the `system_link_connected` binary_sensor below via
+  # lv_img_set_src.
+  - id: spc_icon_yellow
+    file: pictures/spc-icon-yellow.svg
+    resize: 24x24
+    type: RGB565
+    transparency: alpha_channel
+  - id: spc_icon_gray
+    file: pictures/spc-icon-gray.svg
+    resize: 24x24
+    type: RGB565
+    transparency: alpha_channel
 
 display:
   - platform: mipi_rgb
@@ -327,22 +346,26 @@ lvgl:
                 # container as the Wi-Fi icon (a standalone second floating
                 # object did not position correctly), anchored TOP_RIGHT with
                 # a larger x offset so it sits immediately left of the Wi-Fi
-                # glyph with a minimal gap. Same icon font size
-                # (montserrat_22). Green = Controller System (device_id 3)
-                # frames currently fresh over this UART link; red = not
-                # connected/stale, including the boot-default before the
-                # first frame ever arrives. Driven by the
-                # display_protocol_uart `system_link_connected` binary_sensor
-                # below -- see its on_state lambda. Container width widened
-                # from 64 to 140 (transparent background, so the extra space
-                # is invisible) to fit both labels without clipping.
-                - label:
-                    id: spc_icon_label
-                    text: "SPC"
-                    text_font: montserrat_22
-                    text_color: 0xCC0000
+                # glyph with a minimal gap. Icon revision: the "SPC" text
+                # label (green/red recolor) was replaced with the Sweet
+                # POWER Controller house+bolt image widget, same
+                # rasterize-at-compile-time approach as the HA icon below
+                # (see the `image:` block above for spc_icon_yellow/gray).
+                # Yellow = Controller System (device_id 3) frames currently
+                # fresh over this UART link; gray = not connected/stale,
+                # including the boot-default before the first frame ever
+                # arrives. Driven by the display_protocol_uart
+                # `system_link_connected` binary_sensor below -- see its
+                # on_state lambda, which swaps `src` between
+                # spc_icon_yellow/spc_icon_gray via lv_img_set_src.
+                # Container width widened from 64 to 140 (transparent
+                # background, so the extra space is invisible) to fit both
+                # labels without clipping.
+                - image:
+                    id: spc_icon_img
+                    src: spc_icon_gray
                     align: TOP_RIGHT
-                    x: -46
+                    x: -54
                     y: 1
                 # Stage 44H: Home Assistant status icon, immediately left of
                 # "SPC" (final order HA | SPC | WiFi), same container/anchor
@@ -1073,6 +1096,10 @@ binary_sensor:
                 lv_img_set_src(id(ha_icon_img), id(ha_icon_gray));
               }
               lv_obj_send_event(id(ha_icon_img), lvgl::lv_update_event, nullptr);
+    # Icon revision: swaps the spc_icon_img widget's source between the
+    # yellow/gray house+bolt bitmaps (spc_icon_yellow/spc_icon_gray, see
+    # the `image:` block near the top of this file) instead of recoloring
+    # the old "SPC" text label -- same pattern as ha_connected above.
     system_link_connected:
       id: system_link_connected_sensor
       internal: true
@@ -1081,11 +1108,11 @@ binary_sensor:
         then:
           - lambda: |-
               if (x) {
-                lv_obj_set_style_text_color(id(spc_icon_label), lv_color_hex(0x00CC44), 0);
+                lv_img_set_src(id(spc_icon_img), id(spc_icon_yellow));
               } else {
-                lv_obj_set_style_text_color(id(spc_icon_label), lv_color_hex(0xCC0000), 0);
+                lv_img_set_src(id(spc_icon_img), id(spc_icon_gray));
               }
-              lv_obj_send_event(id(spc_icon_label), lvgl::lv_update_event, nullptr);
+              lv_obj_send_event(id(spc_icon_img), lvgl::lv_update_event, nullptr);
     display_enabled:
       id: display_enabled_sensor
       internal: true

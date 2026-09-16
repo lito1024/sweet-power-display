@@ -403,6 +403,29 @@ def test_ha_icon_uses_image_widgets_not_glyph() -> None:
     assert "lv_img_set_src(id(ha_icon_img), id(ha_icon_gray))" in text
 
 
+def test_spc_icon_uses_image_widgets_not_glyph() -> None:
+    # Icon revision: the "SPC" text label (green/red recolor) was switched
+    # to the Sweet POWER Controller house+bolt mark, rasterized at compile
+    # time from two pre-colored SVG files under pictures/ -- same pattern
+    # as test_ha_icon_uses_image_widgets_not_glyph above. Confirm the old
+    # text label and its colors are gone and the image-widget wiring is
+    # present.
+    yaml_path = Path(__file__).resolve().parent.parent / "sweet-power-display-offline-uart.yaml"
+    text = yaml_path.read_text(encoding="utf-8")
+    assert "id: spc_icon_label" not in text  # old text label fully removed
+    assert 'text: "SPC"' not in text
+    assert "0xCC0000" not in text  # old red (stale) text color
+    assert "0x00CC44" not in text  # old green (fresh) text color
+    assert "id: spc_icon_img" in text
+    assert "src: spc_icon_gray" in text  # boot-safe default source
+    assert "id: spc_icon_yellow" in text
+    assert "id: spc_icon_gray" in text
+    assert "pictures/spc-icon-yellow.svg" in text
+    assert "pictures/spc-icon-gray.svg" in text
+    assert "lv_img_set_src(id(spc_icon_img), id(spc_icon_yellow))" in text
+    assert "lv_img_set_src(id(spc_icon_img), id(spc_icon_gray))" in text
+
+
 def main() -> int:
     tests = [
         test_normal_v1_frame_marks_fresh,
@@ -427,6 +450,7 @@ def main() -> int:
         test_ha_reconnect_turns_blue_automatically,
         test_existing_wifi_indicator_unchanged_by_stage_44h,
         test_ha_icon_uses_image_widgets_not_glyph,
+        test_spc_icon_uses_image_widgets_not_glyph,
     ]
     for test in tests:
         test()
