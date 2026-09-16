@@ -49,13 +49,13 @@ Fill in:
 ## Validate
 
 ```powershell
-C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome config sweet-power-display.yaml
+C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome config sweet-power-display-offline-uart.yaml
 ```
 
 ## Compile
 
 ```powershell
-C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome compile sweet-power-display.yaml
+C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome compile sweet-power-display-offline-uart.yaml
 ```
 
 ## Flash Later
@@ -63,13 +63,13 @@ C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome compile sweet-power-d
 USB:
 
 ```powershell
-C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome run sweet-power-display.yaml --device COM4
+C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome run sweet-power-display-offline-uart.yaml --device COM4
 ```
 
 OTA:
 
 ```powershell
-C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome upload sweet-power-display.yaml --device sweet-power-display.local
+C:\Projects\ESP\esphome-venv\Scripts\python.exe -m esphome upload sweet-power-display-offline-uart.yaml --device sweet-power-display.local
 ```
 
 No inverter writes are configured.
