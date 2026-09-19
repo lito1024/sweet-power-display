@@ -36,6 +36,12 @@ void DisplayProtocolUARTComponent::setup() {
   // this publishes the equivalent (spc_link_fresh_/ha_reported_connected_
   // both default-construct to false) directly.
   this->publish_binary_(this->ha_connected_sensor_, false);
+  // Stage 54 boot-safe default: Waiting, not a restored/cached "On" -- both
+  // devices' have_snapshot_ defaults to false, so this simply publishes
+  // that state explicitly rather than leaving the LVGL header on its
+  // static placeholder text until the first stale-check tick.
+  this->update_device_status_(0);
+  this->update_device_status_(1);
 }
 
 void DisplayProtocolUARTComponent::loop() {
@@ -161,7 +167,6 @@ void DisplayProtocolUARTComponent::handle_snapshot_frame_(const ESPTelemetry::Fr
   const bool source_fresh =
       (payload.flags & (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid)) ==
       (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid);
-  const bool was_fresh = this->data_fresh_[device_index];
 
   if (!this->link_connected_[device_index]) {
     ESP_LOGI(TAG, "UART LINK ESTABLISHED device_id=%u", static_cast<unsigned int>(device_index + 1));
@@ -169,18 +174,25 @@ void DisplayProtocolUARTComponent::handle_snapshot_frame_(const ESPTelemetry::Fr
              "sequence: %u frame size: %u",
              static_cast<unsigned int>(frame.sequence),
              static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
-  } else if (source_fresh && !was_fresh) {
-    ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
+
+  // Stage 54 (Stage 43A pattern, ported from esp_telemetry_espnow.cpp):
+  // recovery is immediate and undebounced -- only update_stale_state_ may
+  // ever declare this device newly stale, after source_fresh_grace_ms_ of
+  // no fresh report. A raw-invalid frame here does nothing on its own.
   if (source_fresh) {
-    this->values_marked_stale_[device_index] = false;
+    this->last_raw_fresh_ms_[device_index] = now;
+    if (!this->data_fresh_[device_index]) {
+      ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
+    }
+    this->set_device_freshness_(static_cast<uint8_t>(device_index), true);
   }
-  this->set_device_freshness_(static_cast<uint8_t>(device_index), source_fresh);
   this->update_connection_status_(static_cast<uint8_t>(device_index));
+  this->update_device_status_(static_cast<uint8_t>(device_index));
 
   this->trace_frame_(frame);
-  this->publish_snapshot_(static_cast<uint8_t>(device_index), now);
+  this->publish_snapshot_(static_cast<uint8_t>(device_index), now, source_fresh);
 }
 
 void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::Frame &frame, uint32_t now) {
@@ -223,10 +235,6 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
       this->latest_[device_index].flags &= static_cast<uint16_t>(~ESPTelemetry::SnapshotFlagInputCacheValid);
   }
 
-  for (uint8_t i = 0; i < payload.fieldCount; ++i) {
-    this->publish_telemetry_field_(device_index, payload.fields[i].fieldId, payload.fields[i].value, now);
-  }
-
   // Stage 38: same "trust the Gateway's own source-validity signal, not
   // frame arrival" rule as handle_snapshot_frame_ -- but a single V2
   // frame only ever carries one group's bit (Status -> holding,
@@ -237,7 +245,6 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
       (this->latest_[device_index].flags &
        (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid)) ==
       (ESPTelemetry::SnapshotFlagInputCacheValid | ESPTelemetry::SnapshotFlagHoldingCacheValid);
-  const bool was_fresh = this->data_fresh_[device_index];
 
   if (!this->link_connected_[device_index]) {
     ESP_LOGI(TAG, "UART LINK ESTABLISHED device_id=%u", static_cast<unsigned int>(device_index + 1));
@@ -245,15 +252,32 @@ void DisplayProtocolUARTComponent::handle_telemetry_frame_(const ESPTelemetry::F
              "sequence: %u frame size: %u",
              static_cast<unsigned int>(frame.sequence),
              static_cast<unsigned int>(ESPTelemetry::kHeaderSize + frame.payloadLength + ESPTelemetry::kCrcSize));
-  } else if (source_fresh && !was_fresh) {
-    ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
   }
   this->link_connected_[device_index] = true;
+
+  // Stage 54 (Stage 43A pattern): immediate/undebounced restore; declaring
+  // this device newly stale is exclusively update_stale_state_'s job now --
+  // see handle_snapshot_frame_'s identical comment above. Freshness is
+  // updated BEFORE the field-publish loop below so a recovering frame's
+  // own fields are not needlessly dropped by publish_telemetry_field_'s
+  // data_fresh_ gate.
   if (source_fresh) {
-    this->values_marked_stale_[device_index] = false;
+    this->last_raw_fresh_ms_[device_index] = now;
+    if (!this->data_fresh_[device_index]) {
+      ESP_LOGI(TAG, "SOURCE DATA RESTORED device_id=%u", static_cast<unsigned int>(device_index + 1));
+    }
+    this->set_device_freshness_(device_index, true);
   }
-  this->set_device_freshness_(device_index, source_fresh);
   this->update_connection_status_(device_index);
+  this->update_device_status_(device_index);
+
+  // Stage 54: gated inside publish_telemetry_field_ on the (possibly
+  // just-restored, above) data_fresh_ -- a value from a frame whose group
+  // reports itself not-cache-valid must never look identical to a fresh
+  // reading. See that function's own comment.
+  for (uint8_t i = 0; i < payload.fieldCount; ++i) {
+    this->publish_telemetry_field_(device_index, payload.fields[i].fieldId, payload.fields[i].value, now);
+  }
 
   this->publish_float_(this->gateway_snapshot_age_sensor_[device_index], static_cast<float>(now - this->last_frame_ms_[device_index]));
   this->publish_float_(this->gateway_sequence_sensor_[device_index], static_cast<float>(this->last_sequence_[device_index]));
@@ -290,24 +314,33 @@ void DisplayProtocolUARTComponent::handle_system_telemetry_frame_(const ESPTelem
   this->trace_frame_(frame);
 }
 
-void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint32_t now) {
+void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint32_t now, bool source_fresh) {
   if (!this->have_snapshot_[device_index]) {
     return;
   }
   const ESPTelemetry::SnapshotPayload &latest = this->latest_[device_index];
 
-  if (latest.pv1PowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
-    this->publish_float_(this->pv1_power_sensor_[device_index], static_cast<float>(latest.pv1PowerW));
-  if (latest.pv2PowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
-    this->publish_float_(this->pv2_power_sensor_[device_index], static_cast<float>(latest.pv2PowerW));
-  if (latest.batterySocX10 != ESPTelemetry::kInvalidU16)
-    this->publish_float_(this->battery_soc_sensor_[device_index], static_cast<float>(latest.batterySocX10) / 10.0f);
-  if (latest.batteryChargePowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
-    this->publish_float_(this->battery_charge_power_sensor_[device_index], static_cast<float>(latest.batteryChargePowerW));
-  if (latest.batteryDischargePowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
-    this->publish_float_(this->battery_discharge_power_sensor_[device_index], static_cast<float>(latest.batteryDischargePowerW));
-  if (latest.pv1EnergyWh != ESPTelemetry::kInvalidU32)
-    this->publish_float_(this->pv1_energy_total_sensor_[device_index], static_cast<float>(latest.pv1EnergyWh) / 1000.0f);
+  // Stage 54: gated on THIS frame's own source_fresh -- V1 SnapshotPayload
+  // carries both cache-valid bits together in one frame (unlike V2's
+  // per-group split), matching esp_telemetry_espnow.cpp's
+  // handle_v1_snapshot_frame_. A raw-invalid V1 frame simply never
+  // touches these six fields, leaving whatever mark_device_stale_ already
+  // published (NAN once confirmed stale, or a still-valid reading while
+  // within the source-fresh grace window) untouched.
+  if (source_fresh) {
+    if (latest.pv1PowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
+      this->publish_float_(this->pv1_power_sensor_[device_index], static_cast<float>(latest.pv1PowerW));
+    if (latest.pv2PowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
+      this->publish_float_(this->pv2_power_sensor_[device_index], static_cast<float>(latest.pv2PowerW));
+    if (latest.batterySocX10 != ESPTelemetry::kInvalidU16)
+      this->publish_float_(this->battery_soc_sensor_[device_index], static_cast<float>(latest.batterySocX10) / 10.0f);
+    if (latest.batteryChargePowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
+      this->publish_float_(this->battery_charge_power_sensor_[device_index], static_cast<float>(latest.batteryChargePowerW));
+    if (latest.batteryDischargePowerW != static_cast<int32_t>(ESPTelemetry::kInvalidI32))
+      this->publish_float_(this->battery_discharge_power_sensor_[device_index], static_cast<float>(latest.batteryDischargePowerW));
+    if (latest.pv1EnergyWh != ESPTelemetry::kInvalidU32)
+      this->publish_float_(this->pv1_energy_total_sensor_[device_index], static_cast<float>(latest.pv1EnergyWh) / 1000.0f);
+  }
 
   this->publish_float_(this->gateway_snapshot_age_sensor_[device_index], static_cast<float>(now - this->last_frame_ms_[device_index]));
   this->publish_float_(this->gateway_sequence_sensor_[device_index], static_cast<float>(this->last_sequence_[device_index]));
@@ -331,6 +364,19 @@ void DisplayProtocolUARTComponent::publish_snapshot_(uint8_t device_index, uint3
 void DisplayProtocolUARTComponent::publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now) {
   (void) now;
   if (value == static_cast<int32_t>(ESPTelemetry::kInvalidI32)) {
+    return;
+  }
+  // Stage 54 (ported from esp_telemetry_espnow.cpp's identical Stage 38
+  // guard): don't republish a value from a frame whose group reports
+  // itself not-currently-cache-valid. Without this, a Gateway that keeps
+  // re-sending its last successfully-cached PV/battery/SOC reading (its
+  // own LuxPowerTCP library accessors never expire that cache by age --
+  // only the Gateway's own separately-computed, correctly age-gated
+  // inputCacheValid/holdingCacheValid flag does) would silently look
+  // perfectly live on this Display even after the Gateway's own honest
+  // freshness computation has already declared the source stale -- the
+  // exact 2026-09-18 Gateway-2 incident this stage fixes.
+  if (!this->data_fresh_[device_index]) {
     return;
   }
   ESPTelemetry::SnapshotPayload &latest = this->latest_[device_index];
@@ -718,6 +764,11 @@ void DisplayProtocolUARTComponent::publish_diagnostics_(uint32_t now) {
       this->publish_float_(this->gateway_snapshot_age_sensor_[device_index],
                            static_cast<float>(now - this->last_frame_ms_[device_index]));
     }
+    // Stage 54: republished every ~1s (this function's own throttled call
+    // site in loop()) regardless of whether the code changed, so the LVGL
+    // header's age suffix keeps ticking even during a steady Stale/Offline
+    // state with no new transitions.
+    this->update_device_status_(device_index);
   }
   // Whole-UART-link counters -- see member declaration note.
   this->publish_float_(this->uart_valid_frames_sensor_, static_cast<float>(this->valid_frames_));
@@ -765,26 +816,41 @@ void DisplayProtocolUARTComponent::set_display_maintenance_wifi_actual(bool enab
 void DisplayProtocolUARTComponent::update_stale_state_(uint32_t now) {
   // Stage 32: independent per device -- powering one Gateway off/on must
   // never affect the other's freshness state.
-  //
-  // Transport-link fallback: no frame of any kind arrived within
-  // stale_timeout_ms_ (Gateway/Bridge/UART link itself is unreachable). Short
-  // Gateway source/cache gaps may set data_fresh_ false, but the offline HMI
-  // keeps last valid readings until this transport timeout trips.
   for (uint8_t device_index = 0; device_index < kDeviceCount; ++device_index) {
     if (!this->have_snapshot_[device_index]) {
       continue;
     }
+
+    // Transport-link fallback (Offline): no frame of any kind arrived
+    // within stale_timeout_ms_ -- Gateway/Bridge/UART link itself is
+    // unreachable. Unchanged mechanism from Stage 32/38.
     const bool link_alive = (now - this->last_frame_ms_[device_index]) <= this->stale_timeout_ms_;
-    if (link_alive) {
+    if (!link_alive) {
+      this->link_connected_[device_index] = false;
+      this->set_device_freshness_(device_index, false);
+      this->update_connection_status_(device_index);
+      this->update_device_status_(device_index);
       continue;
     }
-    this->link_connected_[device_index] = false;
-    this->set_device_freshness_(device_index, false);
-    if (!this->values_marked_stale_[device_index]) {
-      this->values_marked_stale_[device_index] = true;
-      this->mark_device_stale_(device_index);
+
+    // Stage 54 (Stage 43A pattern): transport is alive, but the source has
+    // not reported itself fresh for source_fresh_grace_ms_ -- declare
+    // Stale and invalidate. This is the ONLY place a device transitions to
+    // not-fresh while packets keep arriving; a single dropped/corrupted
+    // frame well under this window never trips it, but continued
+    // not-fresh reporting for the full window always does, no matter how
+    // many "fresh-looking" packets arrive in between (see
+    // publish_telemetry_field_'s data_fresh_ gate for why those packets
+    // can look fresh without actually being new measurements).
+    if (this->data_fresh_[device_index]) {
+      const bool within_source_grace =
+          (now - this->last_raw_fresh_ms_[device_index]) <= this->source_fresh_grace_ms_;
+      if (!within_source_grace) {
+        this->set_device_freshness_(device_index, false);
+        this->update_connection_status_(device_index);
+        this->update_device_status_(device_index);
+      }
     }
-    this->update_connection_status_(device_index);
   }
 
   if (this->have_system_frame_ && this->system_link_fresh_ &&
@@ -816,20 +882,36 @@ void DisplayProtocolUARTComponent::update_ha_connected_display_() {
 }
 
 void DisplayProtocolUARTComponent::set_device_freshness_(uint8_t device_index, bool fresh) {
+  // Stage 54 (Stage 43A pattern): the ONLY place this transition invokes
+  // mark_device_stale_ is a genuine was-fresh -> not-fresh edge, so
+  // calling this repeatedly with the same value (e.g. once per
+  // update_stale_state_ tick) is always safe/idempotent.
   const bool was_fresh = this->data_fresh_[device_index];
   this->data_fresh_[device_index] = fresh;
   this->publish_binary_(this->gateway_data_fresh_sensor_[device_index], fresh);
-  (void) was_fresh;
+  if (!fresh && was_fresh) {
+    this->mark_device_stale_(device_index);
+  }
 }
 
 void DisplayProtocolUARTComponent::mark_device_stale_(uint8_t device_index) {
   ESP_LOGW(TAG, "DATA STALE device_id=%u", static_cast<unsigned int>(device_index + 1));
-  // The visible Off state means no packets arrived within stale_timeout_ms_.
-  // Only then clear displayed readings. During shorter source/cache gaps the
-  // HMI deliberately preserves the last valid values.
+  // Stage 54: every instantaneous per-inverter measurement this Display
+  // renders goes unavailable (NAN) on confirmed staleness -- never frozen
+  // at its last value, and never a synthetic zero. This single trigger now
+  // covers both ways a device can go not-fresh: no packets at all
+  // (Offline) and packets still arriving but the source itself stale
+  // (Stale) -- see update_stale_state_.
   this->publish_float_(this->pv1_power_sensor_[device_index], NAN);
   this->publish_float_(this->pv2_power_sensor_[device_index], NAN);
   this->publish_float_(this->battery_soc_sensor_[device_index], NAN);
+  this->publish_float_(this->battery_charge_power_sensor_[device_index], NAN);
+  this->publish_float_(this->battery_discharge_power_sensor_[device_index], NAN);
+  this->publish_float_(this->power_to_grid_sensor_[device_index], NAN);
+  this->publish_float_(this->power_from_grid_sensor_[device_index], NAN);
+  this->publish_float_(this->grid_flow_sensor_[device_index], NAN);
+  this->publish_float_(this->load_power_sensor_[device_index], NAN);
+  this->publish_float_(this->eps_power_sensor_[device_index], NAN);
   this->publish_float_(this->max_backflow_power_sensor_[device_index], NAN);
   this->recompute_derived_(device_index);
 }
@@ -853,17 +935,41 @@ void DisplayProtocolUARTComponent::mark_system_stale_() {
 }
 
 void DisplayProtocolUARTComponent::update_connection_status_(uint8_t device_index) {
-  // Stage 33: CONNECTED/STALE/DISCONNECTED, derived purely from the
-  // existing have_snapshot_/data_fresh_ state -- no separate timeout.
+  // Stage 33/54: WAITING/CONNECTED/STALE/OFFLINE, derived purely from the
+  // existing have_snapshot_/link_connected_/data_fresh_ state -- no
+  // separate timeout of its own. Stage 54 adds the OFFLINE distinction:
+  // previously a fully-dead transport link and a live-but-stale source
+  // both reported "STALE" here, indistinguishably.
   const char *status;
   if (!this->have_snapshot_[device_index]) {
     status = "DISCONNECTED";
+  } else if (!this->link_connected_[device_index]) {
+    status = "OFFLINE";
   } else if (this->data_fresh_[device_index]) {
     status = "CONNECTED";
   } else {
     status = "STALE";
   }
   this->publish_text_(this->connection_status_text_sensor_[device_index], status);
+}
+
+void DisplayProtocolUARTComponent::update_device_status_(uint8_t device_index) {
+  // Stage 54: single source of truth for the LVGL header's Wait/On/Stale/
+  // Offline text -- see set_device_status_sensor's own comment for the
+  // numeric code meaning. Mirrors update_connection_status_'s exact same
+  // priority order, published as a plain number so the YAML lambda can
+  // branch on it without string comparison.
+  uint8_t code;
+  if (!this->have_snapshot_[device_index]) {
+    code = 0;  // Waiting: no snapshot ever received
+  } else if (!this->link_connected_[device_index]) {
+    code = 3;  // Offline: transport itself is dead
+  } else if (!this->data_fresh_[device_index]) {
+    code = 2;  // Stale: packets arriving, source not fresh
+  } else {
+    code = 1;  // Fresh
+  }
+  this->publish_float_(this->device_status_sensor_[device_index], static_cast<float>(code));
 }
 
 void DisplayProtocolUARTComponent::publish_binary_(binary_sensor::BinarySensor *sensor, bool value) {
@@ -894,7 +1000,10 @@ void DisplayProtocolUARTComponent::publish_text_(text_sensor::TextSensor *sensor
 }
 
 void DisplayProtocolUARTComponent::recompute_derived_(uint8_t device_index) {
-  const bool values_available = !this->values_marked_stale_[device_index];
+  // Stage 54: data_fresh_ is now the single, already-debounced source of
+  // truth for "are this device's instantaneous values trustworthy" (see
+  // set_device_freshness_/update_stale_state_) -- no separate flag needed.
+  const bool values_available = this->data_fresh_[device_index];
 
   sensor::Sensor *pv1 = this->pv1_power_sensor_[device_index];
   sensor::Sensor *pv2 = this->pv2_power_sensor_[device_index];

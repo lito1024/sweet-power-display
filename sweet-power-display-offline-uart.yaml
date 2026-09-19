@@ -583,26 +583,38 @@ sensor:
     inverter1_gateway_snapshot_age:
       id: inverter1_packet_age_ms
       internal: true
+    # Stage 54: single source of truth for the header text/color -- 0=Wait
+    # (no snapshot yet), 1=On (fresh), 2=Stale (packets arriving, source
+    # not fresh), 3=Offline (no packets at all). Replaces the previous
+    # packet-age-only thresholds, which showed "On" as long as ANY frame
+    # (even one carrying only frozen/stale-but-successfully-cached values)
+    # arrived within 15s, regardless of whether the Gateway's own source
+    # was actually fresh -- see stages/Stage54.md.
+    inverter1_device_status:
+      id: inverter1_device_status
+      internal: true
       on_value:
         then:
           - lambda: |-
-              char age[12];
-              const uint32_t seconds = static_cast<uint32_t>(x / 1000.0f);
-              if (seconds < 60) {
-                snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
-              } else {
-                snprintf(age, sizeof(age), "%um%02us",
-                         static_cast<unsigned int>(seconds / 60),
-                         static_cast<unsigned int>(seconds % 60));
-              }
-
+              const int code = static_cast<int>(x);
               char header_text[56];
-              if (seconds < 15) {
+              if (code == 1) {
                 snprintf(header_text, sizeof(header_text), "LXP1 #00E676 On#");
-              } else if (seconds < 60) {
-                snprintf(header_text, sizeof(header_text), "LXP1 #FFD600 Wait (%s)#", age);
+              } else if (code == 2) {
+                snprintf(header_text, sizeof(header_text), "LXP1 #FFD600 Stale#");
+              } else if (code == 3) {
+                char age[12];
+                const uint32_t seconds = static_cast<uint32_t>(id(inverter1_packet_age_ms).state / 1000.0f);
+                if (seconds < 60) {
+                  snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
+                } else {
+                  snprintf(age, sizeof(age), "%um%02us",
+                           static_cast<unsigned int>(seconds / 60),
+                           static_cast<unsigned int>(seconds % 60));
+                }
+                snprintf(header_text, sizeof(header_text), "LXP1 #FF3B30 Offline (%s)#", age);
               } else {
-                snprintf(header_text, sizeof(header_text), "LXP1 #FF3B30 Off (%s)#", age);
+                snprintf(header_text, sizeof(header_text), "LXP1 #FFD600 Wait#");
               }
 
               const char *header_current = lv_label_get_text(id(header1_label));
@@ -786,26 +798,32 @@ sensor:
     inverter2_gateway_snapshot_age:
       id: inverter2_packet_age_ms
       internal: true
+    # Stage 54: see inverter1_device_status's identical comment above.
+    inverter2_device_status:
+      id: inverter2_device_status
+      internal: true
       on_value:
         then:
           - lambda: |-
-              char age[12];
-              const uint32_t seconds = static_cast<uint32_t>(x / 1000.0f);
-              if (seconds < 60) {
-                snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
-              } else {
-                snprintf(age, sizeof(age), "%um%02us",
-                         static_cast<unsigned int>(seconds / 60),
-                         static_cast<unsigned int>(seconds % 60));
-              }
-
+              const int code = static_cast<int>(x);
               char header_text[56];
-              if (seconds < 15) {
+              if (code == 1) {
                 snprintf(header_text, sizeof(header_text), "LXP2 #00E676 On#");
-              } else if (seconds < 60) {
-                snprintf(header_text, sizeof(header_text), "LXP2 #FFD600 Wait (%s)#", age);
+              } else if (code == 2) {
+                snprintf(header_text, sizeof(header_text), "LXP2 #FFD600 Stale#");
+              } else if (code == 3) {
+                char age[12];
+                const uint32_t seconds = static_cast<uint32_t>(id(inverter2_packet_age_ms).state / 1000.0f);
+                if (seconds < 60) {
+                  snprintf(age, sizeof(age), "%us", static_cast<unsigned int>(seconds));
+                } else {
+                  snprintf(age, sizeof(age), "%um%02us",
+                           static_cast<unsigned int>(seconds / 60),
+                           static_cast<unsigned int>(seconds % 60));
+                }
+                snprintf(header_text, sizeof(header_text), "LXP2 #FF3B30 Offline (%s)#", age);
               } else {
-                snprintf(header_text, sizeof(header_text), "LXP2 #FF3B30 Off (%s)#", age);
+                snprintf(header_text, sizeof(header_text), "LXP2 #FFD600 Wait#");
               }
 
               const char *header_current = lv_label_get_text(id(header2_label));

@@ -37,6 +37,10 @@ CONF_BATTERY_DISCHARGE_POWER = "battery_discharge_power"
 CONF_PV1_ENERGY_TOTAL = "pv1_energy_total"
 CONF_GATEWAY_SNAPSHOT_AGE = "gateway_snapshot_age"
 CONF_GATEWAY_SEQUENCE = "gateway_sequence"
+# Stage 54: 0=Waiting, 1=Fresh, 2=Stale, 3=Offline -- see
+# DisplayProtocolUARTComponent::update_device_status_. Internal-only,
+# numeric so the LVGL header lambda can branch on it directly.
+CONF_DEVICE_STATUS = "device_status"
 CONF_UART_VALID_FRAMES = "uart_valid_frames"
 CONF_UART_CRC_ERRORS = "uart_crc_errors"
 CONF_UART_DECODE_ERRORS = "uart_decode_errors"
@@ -169,6 +173,7 @@ SENSOR_MAP = {
     CONF_PV1_ENERGY_TOTAL: ("set_pv1_energy_total_sensor", "kWh", DEVICE_CLASS_ENERGY, STATE_CLASS_TOTAL_INCREASING, 3),
     CONF_GATEWAY_SNAPSHOT_AGE: ("set_gateway_snapshot_age_sensor", UNIT_MILLISECOND, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_GATEWAY_SEQUENCE: ("set_gateway_sequence_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
+    CONF_DEVICE_STATUS: ("set_device_status_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_UART_VALID_FRAMES: ("set_uart_valid_frames_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_UART_CRC_ERRORS: ("set_uart_crc_errors_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),
     CONF_UART_DECODE_ERRORS: ("set_uart_decode_errors_sensor", None, None, STATE_CLASS_MEASUREMENT, 0),

@@ -29,6 +29,11 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void dump_config() override;
 
   void set_stale_timeout(uint32_t timeout_ms) { this->stale_timeout_ms_ = timeout_ms; }
+  // Stage 54: separate, shorter debounce for "source reports itself not
+  // fresh" (see last_raw_fresh_ms_) -- independent of stale_timeout_ms_
+  // above, which only ever measures raw transport packet arrival. Default
+  // matches esp_telemetry_espnow.cpp's identical Stage 43A grace window.
+  void set_source_fresh_grace(uint32_t grace_ms) { this->source_fresh_grace_ms_ = grace_ms; }
   void set_trace_frames(bool trace_frames) { this->trace_frames_ = trace_frames; }
   void set_rx_gpio(uint8_t gpio) { this->rx_gpio_ = gpio; }
   void set_tx_gpio(uint8_t gpio) { this->tx_gpio_ = gpio; }
@@ -140,6 +145,11 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   // Stage 31: load_power (FieldId 9085), FAST class, via the new input block 2.
   void set_load_power_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->load_power_sensor_[device_index] = sensor; }
 
+  // Stage 54: 0=Waiting (no snapshot yet), 1=Fresh, 2=Stale (packets
+  // arriving, source not fresh), 3=Offline (no packets at all) -- see
+  // update_device_status_. Internal-only, numeric so the LVGL header
+  // lambda in YAML can branch on it directly.
+  void set_device_status_sensor(uint8_t device_index, sensor::Sensor *sensor) { this->device_status_sensor_[device_index] = sensor; }
   void set_gateway_data_fresh_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->gateway_data_fresh_sensor_[device_index] = sensor; }
   void set_gateway_link_connected_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->gateway_link_connected_sensor_[device_index] = sensor; }
   void set_luxpower_tcp_connected_sensor(uint8_t device_index, binary_sensor::BinarySensor *sensor) { this->luxpower_tcp_connected_sensor_[device_index] = sensor; }
@@ -216,19 +226,32 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void handle_telemetry_frame_(const ESPTelemetry::Frame &frame, uint32_t now);
   void handle_system_telemetry_frame_(const ESPTelemetry::TelemetryPayload &payload, const ESPTelemetry::Frame &frame,
                                       uint32_t now);
-  void publish_snapshot_(uint8_t device_index, uint32_t now);
+  void publish_snapshot_(uint8_t device_index, uint32_t now, bool source_fresh);
   void publish_telemetry_field_(uint8_t device_index, uint16_t field_id, int32_t value, uint32_t now);
   void publish_system_telemetry_field_(uint16_t field_id, int32_t value);
   void publish_diagnostics_(uint32_t now);
   void send_display_status_(uint32_t now);
   void update_stale_state_(uint32_t now);
-  // Stage 38 source-freshness still comes from the Gateway's own per-frame
-  // cache-valid flags and is published as diagnostics. The offline HMI keeps
-  // last valid readings during short source/cache gaps and blanks values only
-  // when no packets arrive for stale_timeout_ms_ (the visible Off state).
+  // Stage 54 (revises Stage 38): source-freshness still comes from the
+  // Gateway's own per-frame cache-valid flags, but is now debounced the
+  // same way esp_telemetry_espnow.cpp's Stage 43A pattern debounces it --
+  // last_raw_fresh_ms_ tracks the last frame that reported itself fresh,
+  // and only update_stale_state_ may declare externally-visible staleness
+  // (after source_fresh_grace_ms_ of no fresh report), never a single
+  // frame's own bit. Recovery is always immediate/undebounced, set
+  // directly from the frame handlers. This replaces Stage 38's "tolerate
+  // source-staleness indefinitely as long as transport stays alive" --
+  // continued packet arrival no longer preserves stale measurements past
+  // this bounded grace window. A second, independent, longer timeout
+  // (stale_timeout_ms_ / last_frame_ms_, unchanged) still separately
+  // detects the transport link itself being dead (Offline).
   void set_device_freshness_(uint8_t device_index, bool fresh);
   void mark_device_stale_(uint8_t device_index);
   void mark_system_stale_();
+  // Stage 54: recomputes and publishes device_status_sensor_ from the
+  // current have_snapshot_/link_connected_/data_fresh_ state -- the single
+  // source of truth for the LVGL header's Waiting/On/Stale/Offline text.
+  void update_device_status_(uint8_t device_index);
   void publish_binary_(binary_sensor::BinarySensor *sensor, bool value);
   void publish_float_(sensor::Sensor *sensor, float value);
   void publish_text_(text_sensor::TextSensor *sensor, const char *value);
@@ -255,10 +278,15 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   bool have_snapshot_[kDeviceCount] = {false, false};
   bool data_fresh_[kDeviceCount] = {false, false};
   bool link_connected_[kDeviceCount] = {false, false};
-  bool values_marked_stale_[kDeviceCount] = {false, false};
   bool have_last_sequence_[kDeviceCount] = {false, false};
   uint16_t last_sequence_[kDeviceCount] = {0, 0};
   uint32_t last_frame_ms_[kDeviceCount] = {0, 0};
+  // Stage 54: last time a frame reported ITSELF source-fresh (mirrors
+  // esp_telemetry_espnow.cpp's last_raw_fresh_ms_) -- the sole signal
+  // update_stale_state_ debounces against via source_fresh_grace_ms_,
+  // independent of last_frame_ms_/stale_timeout_ms_ above (pure transport
+  // arrival, used only for the separate Offline detection).
+  uint32_t last_raw_fresh_ms_[kDeviceCount] = {0, 0};
   bool have_system_frame_ = false;
   bool system_link_fresh_ = false;
   uint32_t last_system_frame_ms_ = 0;
@@ -287,6 +315,10 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   bool display_maintenance_wifi_actual_ = false;
   bool last_display_maintenance_wifi_request_ = true;
   uint32_t stale_timeout_ms_ = 5000;
+  // Stage 54: default matches esp_telemetry_espnow.cpp's identical Stage
+  // 43A grace window -- both consume the same Gateway freshness signal and
+  // should treat a transient dip the same way.
+  uint32_t source_fresh_grace_ms_ = 10000;
   bool trace_frames_ = false;
   uint8_t rx_gpio_ = 44;
   uint8_t tx_gpio_ = 43;
@@ -406,6 +438,8 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *load_power_sensor_[kDeviceCount] = {nullptr, nullptr};
   sensor::Sensor *max_backflow_power_sensor_[kDeviceCount] = {nullptr, nullptr};
 
+  // Stage 54: see set_device_status_sensor above.
+  sensor::Sensor *device_status_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *gateway_data_fresh_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *gateway_link_connected_sensor_[kDeviceCount] = {nullptr, nullptr};
   binary_sensor::BinarySensor *luxpower_tcp_connected_sensor_[kDeviceCount] = {nullptr, nullptr};

@@ -28,8 +28,16 @@ CPP_PATH = REPO_ROOT / "components" / "display_protocol_uart" / "display_protoco
 
 class DeviceState:
     def __init__(self) -> None:
+        # Stage 54: `fresh` is the single, already-debounced gate for every
+        # derived calculation below -- data_fresh_ in the real component
+        # (see DisplayProtocolUARTComponent::recompute_derived_). There is
+        # no separate "values_stale" flag any more: before Stage 54, a
+        # device could report itself not-fresh indefinitely while transport
+        # packets kept arriving, and derived values were only blanked by a
+        # SEPARATE, transport-only timeout -- exactly the bug Stage 54
+        # fixes. Now not-fresh (for any reason: transport-dead or the
+        # source itself stale) always means "do not trust the last values".
         self.fresh = False
-        self.values_stale = False
         self.pv1 = None
         self.pv2 = None
         self.load = None
@@ -54,25 +62,25 @@ def _has(v) -> bool:
 
 
 def recompute_solar(dev: DeviceState) -> float:
-    if not dev.values_stale and _has(dev.pv1) and _has(dev.pv2):
+    if dev.fresh and _has(dev.pv1) and _has(dev.pv2):
         return dev.pv1 + dev.pv2
     return NAN
 
 
 def recompute_power(dev: DeviceState) -> float:
-    if not dev.values_stale and _has(dev.load) and _has(dev.eps):
+    if dev.fresh and _has(dev.load) and _has(dev.eps):
         return dev.load + dev.eps
     return NAN
 
 
 def recompute_grid(dev: DeviceState) -> float:
-    if not dev.values_stale and _has(dev.to_grid) and _has(dev.from_grid):
+    if dev.fresh and _has(dev.to_grid) and _has(dev.from_grid):
         return dev.to_grid - dev.from_grid
     return NAN
 
 
 def recompute_battery(dev: DeviceState) -> float:
-    if not dev.values_stale and _has(dev.charge) and _has(dev.discharge):
+    if dev.fresh and _has(dev.charge) and _has(dev.discharge):
         return dev.charge - dev.discharge
     return NAN
 
@@ -160,17 +168,30 @@ def _format_age(seconds: int) -> str:
     return f"{seconds // 60}m{seconds % 60:02d}s"
 
 
-def render_header_status(name: str, age_ms: float | None) -> str:
-    """Mirrors the gateway_snapshot_age on_value lambda: packet age drives
-    the visible connection status independently of the binary fresh trigger."""
-    if age_ms is None or math.isnan(age_ms):
-        return f"{name} --"
-    seconds = int(age_ms / 1000.0)
-    if seconds < 15:
+DEVICE_STATUS_WAITING = 0
+DEVICE_STATUS_FRESH = 1
+DEVICE_STATUS_STALE = 2
+DEVICE_STATUS_OFFLINE = 3
+
+
+def render_header_status(name: str, code: int | None, offline_age_ms: float | None = None) -> str:
+    """Stage 54: mirrors the inverterN_device_status on_value lambda --
+    driven by DisplayProtocolUARTComponent::update_device_status_'s single
+    Waiting/Fresh/Stale/Offline code, not raw packet age. Age is only shown
+    for Offline (offline_age_ms is inverter1/2_packet_age_ms's own state,
+    read separately inside that same lambda). Replaces the pre-Stage-54
+    packet-age-only thresholds, which showed "On" for up to 15s from ANY
+    packet -- including one carrying only a frozen/stale-but-successfully-
+    cached reading -- regardless of whether the Gateway's own source was
+    actually fresh."""
+    if code is None or code == DEVICE_STATUS_WAITING:
+        return f"{name} #FFD600 Wait#"
+    if code == DEVICE_STATUS_FRESH:
         return f"{name} #00E676 On#"
-    if seconds < 60:
-        return f"{name} #FFD600 Wait ({_format_age(seconds)})#"
-    return f"{name} #FF3B30 Off ({_format_age(seconds)})#"
+    if code == DEVICE_STATUS_STALE:
+        return f"{name} #FFD600 Stale#"
+    seconds = int((offline_age_ms or 0) / 1000.0)
+    return f"{name} #FF3B30 Offline ({_format_age(seconds)})#"
 
 
 # ---------------------------------------------------------------------------
@@ -308,23 +329,30 @@ def test_battery_total_with_opposite_flows_between_inverters() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_source_not_fresh_keeps_last_derived_value_until_transport_off() -> None:
+def test_source_not_fresh_blanks_every_derived_value_immediately() -> None:
+    # Stage 54: this is the corrected behavior. Before Stage 54, a device
+    # reporting itself not-fresh while transport packets kept arriving left
+    # every derived value (Solar/Power/Grid/Battery) showing its last,
+    # possibly long-stale, number -- exactly the 2026-09-18 Gateway-2
+    # incident this stage fixes. Not-fresh (regardless of whether it is
+    # caused by a dead transport link or by the Gateway's own source
+    # reporting itself stale) must always blank every derived value for
+    # that device, never freeze it.
     dev = DeviceState()
     dev.fresh = False
     dev.pv1, dev.pv2 = 100.0, 50.0
     dev.load, dev.eps = 100.0, 50.0
     dev.to_grid, dev.from_grid = 100.0, 50.0
     dev.charge, dev.discharge = 100.0, 50.0
-    assert recompute_solar(dev) == 150.0
-    assert recompute_power(dev) == 150.0
-    assert recompute_grid(dev) == 50.0
-    assert recompute_battery(dev) == 50.0
+    assert math.isnan(recompute_solar(dev))
+    assert math.isnan(recompute_power(dev))
+    assert math.isnan(recompute_grid(dev))
+    assert math.isnan(recompute_battery(dev))
 
 
 def test_transport_off_blanks_every_derived_value_for_that_device() -> None:
     dev = DeviceState()
     dev.fresh = False
-    dev.values_stale = True
     dev.pv1, dev.pv2 = 100.0, 50.0
     dev.load, dev.eps = 100.0, 50.0
     dev.to_grid, dev.from_grid = 100.0, 50.0
@@ -532,47 +560,57 @@ def test_controller_stale_does_not_publish_display_enabled_false() -> None:
 
 
 def test_header_status_initial_before_first_packet() -> None:
-    assert render_header_status("LXP1", None) == "LXP1 --"
+    assert render_header_status("LXP1", None) == "LXP1 #FFD600 Wait#"
+    assert render_header_status("LXP1", DEVICE_STATUS_WAITING) == "LXP1 #FFD600 Wait#"
 
 
-def test_header_status_on_until_15_seconds_without_packets() -> None:
-    assert render_header_status("LXP1", 0) == "LXP1 #00E676 On#"
-    assert render_header_status("LXP1", 14999) == "LXP1 #00E676 On#"
+def test_header_status_fresh_is_on_regardless_of_packet_age() -> None:
+    # Stage 54: unlike the pre-Stage-54 age-only scheme, "On" now depends
+    # solely on the Gateway's own source-fresh signal, not how recently a
+    # packet arrived (a fresh device sends roughly every second anyway).
+    assert render_header_status("LXP1", DEVICE_STATUS_FRESH) == "LXP1 #00E676 On#"
 
 
-def test_header_status_wait_from_15_seconds_to_one_minute() -> None:
-    assert render_header_status("LXP1", 15000) == "LXP1 #FFD600 Wait (15s)#"
-    assert render_header_status("LXP1", 59000) == "LXP1 #FFD600 Wait (59s)#"
+def test_header_status_stale_shown_while_packets_still_arrive() -> None:
+    # Stage 54: this is the exact 2026-09-18 incident state -- packets keep
+    # arriving (so the old age-only scheme said "On") but the Gateway's own
+    # source-freshness has expired. Must render as a distinct warning
+    # state, not "On" and not conflated with a fully dead transport link.
+    assert render_header_status("LXP1", DEVICE_STATUS_STALE) == "LXP1 #FFD600 Stale#"
 
 
-def test_header_status_off_after_one_minute_with_timer() -> None:
-    assert render_header_status("LXP2", 60000) == "LXP2 #FF3B30 Off (1m00s)#"
-    assert render_header_status("LXP2", 65000) == "LXP2 #FF3B30 Off (1m05s)#"
+def test_header_status_offline_shows_age_since_last_packet() -> None:
+    assert render_header_status("LXP2", DEVICE_STATUS_OFFLINE, offline_age_ms=60000) == "LXP2 #FF3B30 Offline (1m00s)#"
+    assert render_header_status("LXP2", DEVICE_STATUS_OFFLINE, offline_age_ms=65000) == "LXP2 #FF3B30 Offline (1m05s)#"
 
 
-def test_header_status_switches_by_packet_age() -> None:
-    ages = [0, 14000, 15000, 59000, 60000, 65000, 0]
-    rendered = [render_header_status("LXP2", age) for age in ages]
+def test_header_status_switches_by_code_not_age() -> None:
+    transitions = [
+        (DEVICE_STATUS_WAITING, None),
+        (DEVICE_STATUS_FRESH, None),
+        (DEVICE_STATUS_STALE, None),
+        (DEVICE_STATUS_OFFLINE, 60000),
+        (DEVICE_STATUS_FRESH, None),  # automatic recovery back to On
+    ]
+    rendered = [render_header_status("LXP2", code, offline_age_ms=age) for code, age in transitions]
     assert rendered == [
+        "LXP2 #FFD600 Wait#",
         "LXP2 #00E676 On#",
-        "LXP2 #00E676 On#",
-        "LXP2 #FFD600 Wait (15s)#",
-        "LXP2 #FFD600 Wait (59s)#",
-        "LXP2 #FF3B30 Off (1m00s)#",
-        "LXP2 #FF3B30 Off (1m05s)#",
+        "LXP2 #FFD600 Stale#",
+        "LXP2 #FF3B30 Offline (1m00s)#",
         "LXP2 #00E676 On#",
     ]
 
 
-def test_header_status_is_driven_by_gateway_snapshot_age_in_yaml() -> None:
+def test_header_status_is_driven_by_device_status_sensor_in_yaml() -> None:
     text = YAML_PATH.read_text(encoding="utf-8")
     assert "stale_timeout: 60s" in text
-    assert "inverter1_gateway_snapshot_age:" in text
-    assert "inverter2_gateway_snapshot_age:" in text
-    assert "Wait (%s)" in text
-    assert "Off (%s)" in text
-    assert "seconds < 15" in text
-    assert "seconds < 60" in text
+    assert "inverter1_device_status:" in text
+    assert "inverter2_device_status:" in text
+    assert "inverter1_packet_age_ms" in text
+    assert "inverter2_packet_age_ms" in text
+    assert "Stale#" in text
+    assert "Offline (%s)#" in text
     assert text.count("lv_label_set_text(id(header1_label)") == 1
     assert text.count("lv_label_set_text(id(header2_label)") == 1
 
@@ -615,7 +653,7 @@ def test_initial_state_renders_as_dashes_not_zero() -> None:
     assert render_signed(recompute_grid(dev)) == ("--", "white")
     assert render_percent(dev.soc) == "--"
     assert render_export(dev.fresh, dev.zero_export_enabled) == ("--", "white")
-    assert render_header_status("LXP1", None) == "LXP1 --"
+    assert render_header_status("LXP1", None) == "LXP1 #FFD600 Wait#"
 
 
 # ---------------------------------------------------------------------------
@@ -693,7 +731,7 @@ def main() -> int:
         test_battery_charging_is_positive_and_green,
         test_battery_discharging_is_negative_and_red,
         test_battery_total_with_opposite_flows_between_inverters,
-        test_source_not_fresh_keeps_last_derived_value_until_transport_off,
+        test_source_not_fresh_blanks_every_derived_value_immediately,
         test_transport_off_blanks_every_derived_value_for_that_device,
         test_partial_input_blanks_that_derived_value_even_if_fresh,
         test_total_blanks_if_either_inverter_unavailable,
@@ -715,11 +753,11 @@ def main() -> int:
         test_display_enabled_is_received_as_controller_system_binary_state,
         test_controller_stale_does_not_publish_display_enabled_false,
         test_header_status_initial_before_first_packet,
-        test_header_status_on_until_15_seconds_without_packets,
-        test_header_status_wait_from_15_seconds_to_one_minute,
-        test_header_status_off_after_one_minute_with_timer,
-        test_header_status_switches_by_packet_age,
-        test_header_status_is_driven_by_gateway_snapshot_age_in_yaml,
+        test_header_status_fresh_is_on_regardless_of_packet_age,
+        test_header_status_stale_shown_while_packets_still_arrive,
+        test_header_status_offline_shows_age_since_last_packet,
+        test_header_status_switches_by_code_not_age,
+        test_header_status_is_driven_by_device_status_sensor_in_yaml,
         test_lxp_headers_still_use_recolor_text_not_icon_images,
         test_initial_state_every_derived_value_is_nan,
         test_initial_state_renders_as_dashes_not_zero,
