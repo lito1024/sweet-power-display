@@ -105,10 +105,6 @@ def render_percent(value: float) -> str:
     return f"{value:.0f}%"
 
 
-def render_export_limit(value: float) -> str:
-    if value is None or math.isnan(value):
-        return "--"
-    return f"{value:.0f}% ({value * 120.0:.0f} W)"
 
 
 def render_voltage(value: float) -> str:
@@ -118,11 +114,13 @@ def render_voltage(value: float) -> str:
 
 
 def grid_voltage_color(value: float) -> str:
+    # Stage 56b owner thresholds: 190-230 green; 160-190 / 230-250 yellow;
+    # below 160 or above 250 red.
     if value is None or math.isnan(value):
         return "white"
-    if 200.0 <= value <= 240.0:
+    if 190.0 <= value <= 230.0:
         return "green"
-    if 185.0 <= value < 200.0 or 240.0 < value <= 255.0:
+    if 160.0 <= value < 190.0 or 230.0 < value <= 250.0:
         return "yellow"
     return "red"
 
@@ -130,9 +128,11 @@ def grid_voltage_color(value: float) -> str:
 def render_system_power(value: float) -> tuple[str, str, bool]:
     if value is None or math.isnan(value):
         return "--", "white", False
-    if value < 2000.0:
-        return f"{value:.0f} W", "green", False
-    if value < 4000.0:
+    # Stage 56b owner thresholds: < 3 kW white, 3-4.5 kW yellow, > 4.5 kW
+    # red; the pre-existing > 5 kW blink is kept.
+    if value < 3000.0:
+        return f"{value:.0f} W", "white", False
+    if value <= 4500.0:
         return f"{value:.0f} W", "yellow", False
     if value <= 5000.0:
         return f"{value:.0f} W", "red", False
@@ -250,10 +250,10 @@ def test_power_total_does_not_fallback_to_stale_slave_load_power() -> None:
 
 
 def test_system_power_color_thresholds_and_blink() -> None:
-    assert render_system_power(1999.0) == ("1999 W", "green", False)
-    assert render_system_power(2000.0) == ("2000 W", "yellow", False)
-    assert render_system_power(3999.0) == ("3999 W", "yellow", False)
-    assert render_system_power(4000.0) == ("4000 W", "red", False)
+    assert render_system_power(2999.0) == ("2999 W", "white", False)
+    assert render_system_power(3000.0) == ("3000 W", "yellow", False)
+    assert render_system_power(4500.0) == ("4500 W", "yellow", False)
+    assert render_system_power(4501.0) == ("4501 W", "red", False)
     assert render_system_power(5000.0) == ("5000 W", "red", False)
     assert render_system_power(5001.0) == ("5001 W", "red", True)
 
@@ -398,8 +398,9 @@ def test_soc_renders_percent_or_dashes_when_unavailable() -> None:
 
 
 def test_export_limit_renders_percent_or_dashes_when_unavailable() -> None:
-    assert render_export_limit(70.0) == "70% (8400 W)"
-    assert render_export_limit(100.0) == "100% (12000 W)"
+    # Stage 56: kW format (owner mockup "50% (6kW)").
+    assert render_export_limit(70.0) == "70% (8.4kW)"
+    assert render_export_limit(100.0) == "100% (12kW)"
     assert render_export_limit(NAN) == "--"
 
 
@@ -424,15 +425,19 @@ def test_export_blanks_before_first_value_ever_received() -> None:
     assert render_export(True, None) == ("--", "white")
 
 
-def test_four_total_labels_and_system_grid_voltage_label_exist_in_yaml() -> None:
+def test_total_labels_and_system_grid_labels_exist_in_yaml() -> None:
+    # Stage 56: the inverter-derived Grid row/TOTAL is gone; "Grid" is now
+    # the Eastron meter (grid_power_label) in the right parameter column.
     text = YAML_PATH.read_text(encoding="utf-8")
     total_label_ids = set(re.findall(r"id:\s*(\w*_total_label)\b", text))
     assert total_label_ids == {
         "solar_total_label",
         "power_total_label",
-        "grid_total_label",
         "battery_total_label",
     }
+    assert "id: grid_power_label" in text
+    for removed in ("grid_total_label", "grid_1_label", "grid_2_label"):
+        assert removed not in text
     assert "id: grid_raw_voltage_label" in text
     assert "power_1_label" not in text
     assert "power_2_label" not in text
@@ -453,20 +458,142 @@ def test_component_declares_total_sensor_only_for_solar_power_grid_battery() -> 
     }
 
 
-def test_total_power_uses_controller_and_grid_uses_inverter_total_in_yaml() -> None:
+def test_power_uses_pzem_and_grid_uses_eastron_in_yaml() -> None:
+    # Owner (2026-10-02): Grid from Eastron (Controller grid_input_power,
+    # FieldId 10009), Power from PZEM (Controller system_output_power).
     text = YAML_PATH.read_text(encoding="utf-8")
-    assert "system_output_power:" in text
-    assert "grid_total:" in text
-    assert "grid_input_power:" not in text
+    power = text[text.index("    system_output_power:\n") : text.index("    grid_raw_voltage:\n")]
+    assert "id(power_total_label)" in power
+    grid = text[text.index("    grid_input_power:\n") : text.index("    grid_raw_voltage:\n")]
+    assert "id(grid_power_label)" in grid
+    assert "id(grid_power_label)" not in power.split("    grid_input_power:\n")[0]
     assert "grid_raw_voltage:" in text
-    assert "id(power_total_label)" in text
-    assert "id(grid_total_label)" in text
     assert "id(grid_raw_voltage_label)" in text
+    # The inverter-derived Grid TOTAL is still decoded but drives no label.
+    grid_total = text[text.index("    grid_total:\n") : text.index("    battery_total:\n")]
+    assert "lv_label" not in grid_total
+
+
+def render_grid_power(x: float) -> tuple[str, str]:
+    # Python mirror of the Stage 56 grid_input_power lambda (Eastron sign:
+    # + import / - export).
+    if math.isnan(x):
+        return ("--", "white")
+    if x > 0:
+        return (f"{x:.0f} W", "yellow")
+    if x < 0:
+        return (f"{x:.0f} W", "green")
+    return ("0 W", "white")
+
+
+def test_grid_power_rendering_follows_eastron_sign() -> None:
+    assert render_grid_power(1852.0) == ("1852 W", "yellow")  # import
+    assert render_grid_power(-640.0) == ("-640 W", "green")  # export
+    assert render_grid_power(0.0) == ("0 W", "white")
+    assert render_grid_power(NAN) == ("--", "white")
+
+
+def render_grid_current(x: float) -> tuple[str, str]:
+    # Python mirror of the Stage 56b grid_input_current lambda.
+    if math.isnan(x):
+        return ("--", "white")
+    color = "green" if x < 20.0 else ("yellow" if x < 25.0 else "red")
+    return (f"{x:.1f} A", color)
+
+
+def test_grid_current_rendering_thresholds() -> None:
+    assert render_grid_current(19.9) == ("19.9 A", "green")
+    assert render_grid_current(20.0) == ("20.0 A", "yellow")
+    assert render_grid_current(24.9) == ("24.9 A", "yellow")
+    assert render_grid_current(25.0) == ("25.0 A", "red")
+    assert render_grid_current(NAN) == ("--", "white")
+    text = YAML_PATH.read_text(encoding="utf-8")
+    block = text[text.index("    grid_input_current:\n") : text.index("    grid_raw_voltage:\n")]
+    assert "x < 20.0f" in block and "x < 25.0f" in block and "id(grid_current_label)" in block
+
+
+def test_pzem_voltage_rendered_green_in_power_row() -> None:
+    text = YAML_PATH.read_text(encoding="utf-8")
+    block = text[text.index("    system_output_voltage:\n") : text.index("    grid_input_current:\n")]
+    assert "id(system_voltage_label)" in block
+    assert '"%.1f V"' in block
+    assert "lv_obj_set_style_text_color" not in block  # fixed green from the widget
+
+
+def render_export_limit(x: float) -> str:
+    # Python mirror of the Stage 56 Export Limit lambda.
+    if x is None or math.isnan(x):
+        return "--"
+    kw = x * 120.0 / 1000.0
+    if abs(kw - round(kw)) < 0.05:
+        return f"{x:.0f}% ({kw:.0f}kW)"
+    return f"{x:.0f}% ({kw:.1f}kW)"
+
+
+def test_export_limit_is_rendered_in_kw() -> None:
+    assert render_export_limit(50.0) == "50% (6kW)"
+    assert render_export_limit(100.0) == "100% (12kW)"
+    assert render_export_limit(45.0) == "45% (5.4kW)"
+    assert render_export_limit(0.0) == "0% (0kW)"
+    assert render_export_limit(NAN) == "--"
+    text = YAML_PATH.read_text(encoding="utf-8")
+    assert '"%.0f%% (%.0fkW)"' in text and '"%.0f%% (%.1fkW)"' in text
+    assert "(%.0f W)" not in text
+
+
+def test_stage56_layout_top_section_and_reserved_area() -> None:
+    text = YAML_PATH.read_text(encoding="utf-8")
+    top = text.index("id: top_section")
+    sep = text.index("id: reserved_area")
+    section = text[top:sep]
+    table = section[section.index("id: inverter_table") : section.index("# ---- Right: parameter column")]
+    right = section[section.index("# ---- Right: parameter column") :]
+    # Left table rows (Stage 56b: Power under SOC), no per-inverter Grid row.
+    rows = [table.index(f'text: "{n}"') for n in ("TOTAL", "Solar", "PV1", "PV2", "Battery", "SOC", "Power")]
+    assert rows == sorted(rows)
+    assert 'text: "Grid"' not in table
+    # Power row: TOTAL = power_total_label, LXP1 = caption "Voltage",
+    # LXP2 = PZEM voltage (green).
+    power_row = table[table.index('text: "Power"') :]
+    order = [power_row.index(x) for x in ("id: power_total_label", 'text: "Voltage"', "id: system_voltage_label")]
+    assert order == sorted(order)
+    assert "id: system_voltage_label, text: \"--\", text_font: montserrat_26, text_color: 0x00E676" in power_row
+    # Right column order (Stage 56b): Export, Limit, Grid, Voltage, Current.
+    names = [right.index(f'text: "{n}"') for n in ("Export", "Limit", "Grid", "Voltage", "Current")]
+    assert names == sorted(names)
+    for label in ("export_1_label", "export_limit_1_label", "grid_power_label",
+                  "grid_raw_voltage_label", "grid_current_label"):
+        assert f"id: {label}" in right, label
+    assert 'text: "Power"' not in right and 'text: "Grid V"' not in text
+    # No LVGL row gap in the top section (the 56a SOC-clipping cause).
+    assert section.count("pad_row: 0") >= 3
+    row_heights = [int(h) for h in __import__("re").findall(r"height: (\d+)\n                          border_width: 0", table)]
+    assert sum(row_heights) <= 226, row_heights
+    # The reserved lower area is an empty placeholder (no child widgets).
+    reserved = text[sep : text.index("\n# Stage 37: raw pass-through sensors")]
+    assert "widgets:" not in reserved
+    assert "flex_grow: 1" in reserved
+
+
+def test_header_icons_are_packed_tightly() -> None:
+    text = YAML_PATH.read_text(encoding="utf-8")
+    spc = text[text.index("id: spc_icon_img") : text.index("id: spc_icon_img") + 200]
+    ha = text[text.index("id: ha_icon_img") : text.index("id: ha_icon_img") + 200]
+    assert "x: -42" in spc
+    assert "x: -70" in ha
+
+
+def test_offline_header_switches_to_small_font_only_when_offline() -> None:
+    text = YAML_PATH.read_text(encoding="utf-8")
+    for n in ("1", "2"):
+        assert (f"lv_obj_set_style_text_font(id(header{n}_label),\n"
+                f"                    code == 3 ? &lv_font_montserrat_14 : &lv_font_montserrat_20, 0);") in text
 
 
 def test_lower_parameter_columns_use_controller_and_inverter1_only() -> None:
     text = YAML_PATH.read_text(encoding="utf-8")
-    assert "Export Limit" in text
+    assert 'text: "Limit"' in text  # Stage 56b: renamed from "Export Limit"
+    assert 'text: "Export Limit"' not in text
     assert "x * 120.0f" in text
     assert "export_limit_1_label" in text
     assert "export_1_label" in text
@@ -494,14 +621,14 @@ def test_export_limit_watts_are_not_written_to_soc_label() -> None:
 
 
 def test_grid_voltage_color_thresholds() -> None:
-    assert grid_voltage_color(184.9) == "red"
-    assert grid_voltage_color(185.0) == "yellow"
-    assert grid_voltage_color(199.9) == "yellow"
-    assert grid_voltage_color(200.0) == "green"
-    assert grid_voltage_color(240.0) == "green"
-    assert grid_voltage_color(240.1) == "yellow"
-    assert grid_voltage_color(255.0) == "yellow"
-    assert grid_voltage_color(255.1) == "red"
+    assert grid_voltage_color(159.9) == "red"
+    assert grid_voltage_color(160.0) == "yellow"
+    assert grid_voltage_color(189.9) == "yellow"
+    assert grid_voltage_color(190.0) == "green"
+    assert grid_voltage_color(230.0) == "green"
+    assert grid_voltage_color(230.1) == "yellow"
+    assert grid_voltage_color(250.0) == "yellow"
+    assert grid_voltage_color(250.1) == "red"
     assert grid_voltage_color(NAN) == "white"
 
 
@@ -697,7 +824,7 @@ def test_mockup_scenario_end_to_end() -> None:
     assert render_signed(battery_1) == ("+600 W", "green")
 
     assert render_percent(lpx1.soc) == "100%"
-    assert render_export_limit(lpx1.max_backflow) == "70% (8400 W)"
+    assert render_export_limit(lpx1.max_backflow) == "70% (8.4kW)"  # Stage 56: kW
 
     # Export tracks zero_export_enabled directly (see the Stage 37 field
     # correction note on render_export) -- lpx1's False -> Off, lpx2's
@@ -742,9 +869,16 @@ def main() -> int:
         test_export_keeps_last_value_when_source_not_fresh_but_link_connected,
         test_export_blanks_when_link_off_even_if_last_known_value_exists,
         test_export_blanks_before_first_value_ever_received,
-        test_four_total_labels_and_system_grid_voltage_label_exist_in_yaml,
+        test_total_labels_and_system_grid_labels_exist_in_yaml,
         test_component_declares_total_sensor_only_for_solar_power_grid_battery,
-        test_total_power_uses_controller_and_grid_uses_inverter_total_in_yaml,
+        test_power_uses_pzem_and_grid_uses_eastron_in_yaml,
+        test_grid_power_rendering_follows_eastron_sign,
+        test_export_limit_is_rendered_in_kw,
+        test_grid_current_rendering_thresholds,
+        test_pzem_voltage_rendered_green_in_power_row,
+        test_stage56_layout_top_section_and_reserved_area,
+        test_header_icons_are_packed_tightly,
+        test_offline_header_switches_to_small_font_only_when_offline,
         test_lower_parameter_columns_use_controller_and_inverter1_only,
         test_export_limit_watts_are_not_written_to_soc_label,
         test_grid_voltage_color_thresholds,

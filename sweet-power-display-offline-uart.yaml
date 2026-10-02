@@ -361,11 +361,13 @@ lvgl:
                 # Container width widened from 64 to 140 (transparent
                 # background, so the extra space is invisible) to fit both
                 # labels without clipping.
+                # Stage 56: icons packed tighter (owner request) -- 4px gaps:
+                # Wi-Fi glyph occupies ~x -38..-10, SPC 24px at -42, HA at -70.
                 - image:
                     id: spc_icon_img
                     src: spc_icon_gray
                     align: TOP_RIGHT
-                    x: -54
+                    x: -42
                     y: 1
                 # Stage 44H: Home Assistant status icon, immediately left of
                 # "SPC" (final order HA | SPC | WiFi), same container/anchor
@@ -384,7 +386,7 @@ lvgl:
                     id: ha_icon_img
                     src: ha_icon_gray
                     align: TOP_RIGHT
-                    x: -100
+                    x: -70
                     y: 1
           - label:
               text: "SWEET POWER"
@@ -393,188 +395,223 @@ lvgl:
               text_align: center
               width: 100%
               height: 28
-          # Header: blank label-column cell, then TOTAL/LPX1/LPX2. LPX1/LPX2
-          # are a single recolor-enabled label combining the inverter name
-          # and its connection status ("LPX1 On"/"LPX1 Off") -- name in
-          # white, status word in green/red -- updated only on an actual
-          # freshness transition (see inverter{1,2}_fresh below), not on
-          # every telemetry frame. No icon/image asset used.
+          # Stage 56 layout (owner mockup 2026-10-02), revised the same day
+          # (Stage 56b): the whole live dataset is in the TOP part of the
+          # screen -- inverter table on the left (TOTAL/LXP1/LXP2 x Solar/
+          # PV1/PV2/Battery/SOC/Power) and a five-row parameter column on the
+          # right (Export / Limit / Grid / Voltage / Current). Everything
+          # below the separator is RESERVED for future content (connection
+          # schemes, generator, etc.) and intentionally left empty.
+          # layout pad_row: 0 everywhere here -- LVGL's default row gap is NOT 0
+          # (the theme only zeroes pad_all), and with it the first 186px
+          # version clipped the last (SOC) row off the bottom.
           - obj:
+              id: top_section
               width: 100%
-              height: 30
+              height: 226
               border_width: 0
               pad_all: 0
               scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: start, pad_row: 0, pad_column: 0}
               widgets:
-                - obj: {width: 150, height: 1, border_width: 0, pad_all: 0}
-                - label: {text: "TOTAL", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: header1_label, text: "LXP1 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
-                - label: {id: header2_label, text: "LXP2 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
-          # Solar = PV1+PV2 per inverter, TOTAL = both inverters combined.
-          # Same font size as Power/Grid/Battery (visual weight comes from
-          # color/position, not from being uniquely oversized).
-          - obj:
-              width: 100%
-              height: 40
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "Solar", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - label: {id: solar_total_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
-                - label: {id: solar_1_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
-                - label: {id: solar_2_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
-          # PV1/PV2: smaller subordinate rows under Solar. No TOTAL value.
-          - obj:
-              width: 100%
-              height: 22
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "PV1", text_font: montserrat_14, text_color: 0xCCCCCC, width: 150, pad_left: 16}
-                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
-                - label: {id: pv1_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
-                - label: {id: pv1_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
-          - obj:
-              width: 100%
-              height: 22
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "PV2", text_font: montserrat_14, text_color: 0xCCCCCC, width: 150, pad_left: 16}
-                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
-                - label: {id: pv2_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
-                - label: {id: pv2_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
-          # Grid = PowerToGrid-PowerFromGrid per inverter, TOTAL = both
-          # inverters combined. Positive/export is green; negative/import is
-          # red.
-          - obj:
-              width: 100%
-              height: 40
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "Grid", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - label: {id: grid_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: grid_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: grid_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-          # Battery = Battery Charge Power - Battery Discharge Power.
-          # Signed; green=charging, red=discharging.
-          - obj:
-              width: 100%
-              height: 40
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "Battery", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - label: {id: battery_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: battery_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: battery_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-          # SOC: per-inverter only, no TOTAL (percentages don't sum).
-          - obj:
-              width: 100%
-              height: 30
-              border_width: 0
-              pad_all: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-              widgets:
-                - label: {text: "SOC", text_font: montserrat_20, text_color: 0xFFFFFF, width: 150}
-                - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
-                - label: {id: soc_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-                - label: {id: soc_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
-          - obj:
-              width: 100%
-              height: 10
-              border_width: 0
-              pad_top: 4
-              pad_bottom: 4
-              scrollable: false
-              widgets:
-                - obj: {width: 100%, height: 2, bg_color: 0x444444, border_width: 0, pad_all: 0}
-          - obj:
-              width: 100%
-              height: 86
-              border_width: 0
-              pad_top: 2
-              pad_bottom: 0
-              scrollable: false
-              layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: stretch}
-              widgets:
+                # ---- Left: inverter table (63%), 7 rows = 224px ----
                 - obj:
-                    width: 42%
+                    id: inverter_table
+                    width: 63%
                     height: 100%
                     border_width: 0
-                    pad_right: 8
+                    pad_all: 0
                     scrollable: false
-                    layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
+                    layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch, pad_row: 0}
+                    widgets:
+                      # Header: blank label-column cell, then TOTAL/LXP1/LXP2.
+                      # LXP1/LXP2 are recolor labels ("LXP1 On", name white,
+                      # status colored) updated only on a device-status
+                      # transition (see inverter{1,2}_device_status below).
+                      - obj:
+                          width: 100%
+                          height: 30
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - obj: {width: 100, height: 1, border_width: 0, pad_all: 0}
+                            - label: {text: "TOTAL", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {id: header1_label, text: "LXP1 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
+                            - label: {id: header2_label, text: "LXP2 --", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1, recolor: true}
+                      # Solar = PV1+PV2 per inverter, TOTAL = both combined.
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Solar", text_font: montserrat_20, text_color: 0xFFFFFF, width: 100}
+                            - label: {id: solar_total_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                            - label: {id: solar_1_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                            - label: {id: solar_2_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                      # PV1/PV2: smaller subordinate rows under Solar. No TOTAL.
+                      - obj:
+                          width: 100%
+                          height: 22
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "PV1", text_font: montserrat_14, text_color: 0xCCCCCC, width: 100, pad_left: 16}
+                            - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                            - label: {id: pv1_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                            - label: {id: pv1_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                      - obj:
+                          width: 100%
+                          height: 22
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "PV2", text_font: montserrat_14, text_color: 0xCCCCCC, width: 100, pad_left: 16}
+                            - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                            - label: {id: pv2_1_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                            - label: {id: pv2_2_label, text: "--", text_font: montserrat_16, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                      # Battery = Charge - Discharge. Signed; green=charging,
+                      # red=discharging.
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Battery", text_font: montserrat_20, text_color: 0xFFFFFF, width: 100}
+                            - label: {id: battery_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {id: battery_1_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {id: battery_2_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                      # SOC: per-inverter only, no TOTAL.
+                      - obj:
+                          width: 100%
+                          height: 30
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "SOC", text_font: montserrat_20, text_color: 0xFFFFFF, width: 100}
+                            - obj: {flex_grow: 1, height: 1, border_width: 0, pad_all: 0}
+                            - label: {id: soc_1_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {id: soc_2_label, text: "--", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                      # Stage 56b Power row (under SOC): TOTAL column = Controller
+                      # system_output_power (PZEM #1); LXP1 column = the caption
+                      # "Voltage"; LXP2 column = Controller system_output_voltage
+                      # (PZEM #1 voltage), always green.
+                      - obj:
+                          width: 100%
+                          height: 40
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Power", text_font: montserrat_20, text_color: 0xFFFFFF, width: 100}
+                            - label: {id: power_total_label, text: "--", text_font: montserrat_26, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {text: "Voltage", text_font: montserrat_20, text_color: 0xFFFFFF, text_align: center, flex_grow: 1}
+                            - label: {id: system_voltage_label, text: "--", text_font: montserrat_26, text_color: 0x00E676, text_align: center, flex_grow: 1}
+                # ---- Right: parameter column (37%) ----
+                # Export / Limit: inverter 1 (both inverters are synchronized in
+                # parallel operation). Grid / Voltage / Current: the Eastron grid
+                # meter via Controller grid_input_power / grid_raw_voltage /
+                # grid_input_current.
+                - obj:
+                    width: 37%
+                    height: 100%
+                    border_width: 0
+                    pad_left: 12
+                    scrollable: false
+                    layout: {type: flex, flex_flow: column, flex_align_main: space_between, flex_align_cross: stretch, pad_row: 0}
                     widgets:
                       - obj:
                           width: 100%
-                          height: 40
+                          height: 34
                           border_width: 0
                           pad_all: 0
                           scrollable: false
                           layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
                           widgets:
-                            - label: {text: "Power", text_font: montserrat_20, text_color: 0xFFFFFF, width: 90}
-                            - label: {id: power_total_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: right, flex_grow: 1}
+                            - label: {text: "Export", text_font: montserrat_20, text_color: 0xFFFFFF, width: 124}
+                            - label: {id: export_1_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
                       - obj:
                           width: 100%
-                          height: 40
+                          height: 34
                           border_width: 0
                           pad_all: 0
                           scrollable: false
                           layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
                           widgets:
-                            - label: {text: "Grid V", text_font: montserrat_20, text_color: 0xFFFFFF, width: 90}
-                            - label: {id: grid_raw_voltage_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: right, flex_grow: 1}
-                - obj:
-                    width: 58%
-                    height: 100%
-                    border_width: 0
-                    pad_left: 94
-                    scrollable: false
-                    layout: {type: flex, flex_flow: column, flex_align_main: start, flex_align_cross: stretch}
-                    widgets:
-                      - obj:
-                          width: 100%
-                          height: 40
-                          border_width: 0
-                          pad_all: 0
-                          scrollable: false
-                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
-                          widgets:
-                            - label: {text: "Export Limit", text_font: montserrat_20, text_color: 0xFFFFFF, width: 130}
+                            - label: {text: "Limit", text_font: montserrat_20, text_color: 0xFFFFFF, width: 124}
                             - label: {id: export_limit_1_label, text: "--", text_font: montserrat_24, text_color: 0xFFD600, text_align: left, flex_grow: 1}
                       - obj:
                           width: 100%
-                          height: 40
+                          height: 34
                           border_width: 0
                           pad_all: 0
                           scrollable: false
                           layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
                           widgets:
-                            - label: {text: "Export", text_font: montserrat_20, text_color: 0xFFFFFF, width: 130}
-                            - label: {id: export_1_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
+                            - label: {text: "Grid", text_font: montserrat_20, text_color: 0xFFFFFF, width: 124}
+                            - label: {id: grid_power_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
+                      - obj:
+                          width: 100%
+                          height: 34
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Voltage", text_font: montserrat_20, text_color: 0xFFFFFF, width: 124}
+                            - label: {id: grid_raw_voltage_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
+                      - obj:
+                          width: 100%
+                          height: 34
+                          border_width: 0
+                          pad_all: 0
+                          scrollable: false
+                          layout: {type: flex, flex_flow: row, flex_align_main: start, flex_align_cross: center}
+                          widgets:
+                            - label: {text: "Current", text_font: montserrat_20, text_color: 0xFFFFFF, width: 124}
+                            - label: {id: grid_current_label, text: "--", text_font: montserrat_24, text_color: 0xFFFFFF, text_align: left, flex_grow: 1}
+          - obj:
+              width: 100%
+              height: 12
+              border_width: 0
+              pad_top: 5
+              pad_bottom: 5
+              scrollable: false
+              widgets:
+                - obj: {width: 100%, height: 2, bg_color: 0x444444, border_width: 0, pad_all: 0}
+          # Stage 56: RESERVED lower area -- connection schemes, generator
+          # and other future information. Intentionally empty; fills the
+          # remaining screen height.
+          - obj:
+              id: reserved_area
+              width: 100%
+              flex_grow: 1
+              border_width: 0
+              pad_all: 0
+              scrollable: false
 
 # Stage 37: raw pass-through sensors needed either as a directly-displayed
 # row (PV1, PV2, SOC) or purely as a computation input for
 # recompute_derived_ (Load/EPS/PowerToGrid/PowerFromGrid/BatteryCharge/
 # BatteryDischarge -- no LVGL label reads these directly, only the derived
 # Grid/Battery sensors below do), plus the Stage 37 derived sensors
-# themselves. Controller/system Power and Grid V are shown in the lower
-# left parameter column. Export Limit/Export use inverter 1 because both
+# themselves. Stage 56b: Power (PZEM) and PZEM voltage are the inverter
+# table's last row; Grid / Voltage / Current (Eastron) are in the right
+# parameter column. Export Limit/Export use inverter 1 because both
 # inverters are synchronized in parallel operation.
 
 sensor:
@@ -619,6 +656,10 @@ sensor:
 
               const char *header_current = lv_label_get_text(id(header1_label));
               if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                // Stage 56: the inverter columns are narrower (~140px);
+                // only the long "Offline (age)" text drops to 14px.
+                lv_obj_set_style_text_font(id(header1_label),
+                    code == 3 ? &lv_font_montserrat_14 : &lv_font_montserrat_20, 0);
                 lv_label_set_text(id(header1_label), header_text);
                 lv_obj_send_event(id(header1_label), lvgl::lv_update_event, nullptr);
               }
@@ -701,7 +742,13 @@ sensor:
               if (std::isnan(x)) {
                 snprintf(text, sizeof(text), "--");
               } else {
-                snprintf(text, sizeof(text), "%.0f%% (%.0f W)", x, x * 120.0f);
+                // Stage 56: limit shown in kW (owner mockup "50% (6kW)").
+                const float kw = x * 120.0f / 1000.0f;
+                if (fabsf(kw - roundf(kw)) < 0.05f) {
+                  snprintf(text, sizeof(text), "%.0f%% (%.0fkW)", x, kw);
+                } else {
+                  snprintf(text, sizeof(text), "%.0f%% (%.1fkW)", x, kw);
+                }
               }
               const char *current = lv_label_get_text(id(export_limit_1_label));
               if (current == nullptr || strcmp(current, text) != 0) {
@@ -731,28 +778,6 @@ sensor:
     inverter1_grid_net:
       name: "Inverter 1 Grid"
       id: inverter1_grid_net
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              lv_color_t color = lv_color_hex(0xFFFFFF);
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else if (x > 0) {
-                snprintf(text, sizeof(text), "+%.0f W", x);
-                color = lv_color_hex(0x00E676);
-              } else if (x < 0) {
-                snprintf(text, sizeof(text), "%.0f W", x);
-                color = lv_color_hex(0xFF3B30);
-              } else {
-                snprintf(text, sizeof(text), "0 W");
-              }
-              const char *current = lv_label_get_text(id(grid_1_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(grid_1_label), text);
-                lv_obj_set_style_text_color(id(grid_1_label), color, 0);
-                lv_obj_send_event(id(grid_1_label), lvgl::lv_update_event, nullptr);
-              }
     inverter1_battery_net:
       name: "Inverter 1 Battery Net"
       id: inverter1_battery_net
@@ -828,6 +853,10 @@ sensor:
 
               const char *header_current = lv_label_get_text(id(header2_label));
               if (header_current == nullptr || strcmp(header_current, header_text) != 0) {
+                // Stage 56: the inverter columns are narrower (~140px);
+                // only the long "Offline (age)" text drops to 14px.
+                lv_obj_set_style_text_font(id(header2_label),
+                    code == 3 ? &lv_font_montserrat_14 : &lv_font_montserrat_20, 0);
                 lv_label_set_text(id(header2_label), header_text);
                 lv_obj_send_event(id(header2_label), lvgl::lv_update_event, nullptr);
               }
@@ -909,28 +938,6 @@ sensor:
     inverter2_grid_net:
       name: "Inverter 2 Grid"
       id: inverter2_grid_net
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              lv_color_t color = lv_color_hex(0xFFFFFF);
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else if (x > 0) {
-                snprintf(text, sizeof(text), "+%.0f W", x);
-                color = lv_color_hex(0x00E676);
-              } else if (x < 0) {
-                snprintf(text, sizeof(text), "%.0f W", x);
-                color = lv_color_hex(0xFF3B30);
-              } else {
-                snprintf(text, sizeof(text), "0 W");
-              }
-              const char *current = lv_label_get_text(id(grid_2_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(grid_2_label), text);
-                lv_obj_set_style_text_color(id(grid_2_label), color, 0);
-                lv_obj_send_event(id(grid_2_label), lvgl::lv_update_event, nullptr);
-              }
     inverter2_battery_net:
       name: "Inverter 2 Battery Net"
       id: inverter2_battery_net
@@ -985,11 +992,14 @@ sensor:
               if (std::isnan(x)) {
                 snprintf(text, sizeof(text), "--");
                 id(system_power_blink_active) = false;
-              } else if (x < 2000.0f) {
+              } else if (x < 3000.0f) {
+                // Stage 56b owner thresholds: < 3 kW white, 3-4.5 kW
+                // yellow, > 4.5 kW red (the pre-existing > 5 kW red blink
+                // is kept on top of that).
                 snprintf(text, sizeof(text), "%.0f W", x);
-                color = lv_color_hex(0x00E676);
+                color = lv_color_hex(0xFFFFFF);
                 id(system_power_blink_active) = false;
-              } else if (x < 4000.0f) {
+              } else if (x <= 4500.0f) {
                 snprintf(text, sizeof(text), "%.0f W", x);
                 color = lv_color_hex(0xFFD600);
                 id(system_power_blink_active) = false;
@@ -1013,6 +1023,84 @@ sensor:
                 id(system_power_blink_visible) = true;
               }
               lv_obj_send_event(id(power_total_label), lvgl::lv_update_event, nullptr);
+    # Stage 56: Display "Grid" = Controller grid_input_power / FieldId 10009,
+    # produced by the Eastron grid meter (Controller Stage 56). Signed as the
+    # meter reports it: positive = IMPORT from the external grid (shown
+    # without a sign, yellow), negative = EXPORT (shown with "-", green),
+    # 0 = white. NAN (Controller stale/invalid) -> "--".
+    grid_input_power:
+      name: "Grid Input Power"
+      id: grid_input_power_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else if (x > 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0xFFD600);
+              } else if (x < 0) {
+                snprintf(text, sizeof(text), "%.0f W", x);
+                color = lv_color_hex(0x00E676);
+              } else {
+                snprintf(text, sizeof(text), "0 W");
+              }
+              const char *current = lv_label_get_text(id(grid_power_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_power_label), text);
+              }
+              lv_obj_set_style_text_color(id(grid_power_label), color, 0);
+              lv_obj_send_event(id(grid_power_label), lvgl::lv_update_event, nullptr);
+    # Stage 56b: Power row, LXP2 column -- PZEM #1 voltage via Controller
+    # system_output_voltage / FieldId 10001. Always green; "--" when invalid.
+    system_output_voltage:
+      name: "System Output Voltage"
+      id: system_output_voltage_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.1f V", x);
+              }
+              const char *current = lv_label_get_text(id(system_voltage_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(system_voltage_label), text);
+                lv_obj_send_event(id(system_voltage_label), lvgl::lv_update_event, nullptr);
+              }
+    # Stage 56b: "Current" -- Eastron grid current via Controller
+    # grid_input_current / FieldId 10008. Owner thresholds: < 20 A green,
+    # 20-25 A yellow, >= 25 A red.
+    grid_input_current:
+      name: "Grid Input Current"
+      id: grid_input_current_sensor
+      on_value:
+        then:
+          - lambda: |-
+              char text[24];
+              lv_color_t color = lv_color_hex(0xFFFFFF);
+              if (std::isnan(x)) {
+                snprintf(text, sizeof(text), "--");
+              } else {
+                snprintf(text, sizeof(text), "%.1f A", x);
+                if (x < 20.0f) {
+                  color = lv_color_hex(0x00E676);
+                } else if (x < 25.0f) {
+                  color = lv_color_hex(0xFFD600);
+                } else {
+                  color = lv_color_hex(0xFF3B30);
+                }
+              }
+              const char *current = lv_label_get_text(id(grid_current_label));
+              if (current == nullptr || strcmp(current, text) != 0) {
+                lv_label_set_text(id(grid_current_label), text);
+              }
+              lv_obj_set_style_text_color(id(grid_current_label), color, 0);
+              lv_obj_send_event(id(grid_current_label), lvgl::lv_update_event, nullptr);
     grid_raw_voltage:
       name: "Grid Raw Voltage"
       id: grid_raw_voltage_sensor
@@ -1025,9 +1113,10 @@ sensor:
                 snprintf(text, sizeof(text), "--");
               } else {
                 snprintf(text, sizeof(text), "%.1f V", x);
-                if (x >= 200.0f && x <= 240.0f) {
+                // Stage 56b owner thresholds.
+                if (x >= 190.0f && x <= 230.0f) {
                   color = lv_color_hex(0x00E676);
-                } else if ((x >= 185.0f && x < 200.0f) || (x > 240.0f && x <= 255.0f)) {
+                } else if ((x >= 160.0f && x < 190.0f) || (x > 230.0f && x <= 250.0f)) {
                   color = lv_color_hex(0xFFD600);
                 } else {
                   color = lv_color_hex(0xFF3B30);
@@ -1039,31 +1128,11 @@ sensor:
               }
               lv_obj_set_style_text_color(id(grid_raw_voltage_label), color, 0);
               lv_obj_send_event(id(grid_raw_voltage_label), lvgl::lv_update_event, nullptr);
+    # Stage 56: inverter-derived Grid TOTAL is no longer displayed (the
+    # Display "Grid" now shows the Eastron meter, grid_input_power).
     grid_total:
       name: "Total Grid"
       id: grid_total_sensor
-      on_value:
-        then:
-          - lambda: |-
-              char text[24];
-              lv_color_t color = lv_color_hex(0xFFFFFF);
-              if (std::isnan(x)) {
-                snprintf(text, sizeof(text), "--");
-              } else if (x > 0) {
-                snprintf(text, sizeof(text), "+%.0f W", x);
-                color = lv_color_hex(0x00E676);
-              } else if (x < 0) {
-                snprintf(text, sizeof(text), "%.0f W", x);
-                color = lv_color_hex(0xFF3B30);
-              } else {
-                snprintf(text, sizeof(text), "0 W");
-              }
-              const char *current = lv_label_get_text(id(grid_total_label));
-              if (current == nullptr || strcmp(current, text) != 0) {
-                lv_label_set_text(id(grid_total_label), text);
-                lv_obj_set_style_text_color(id(grid_total_label), color, 0);
-                lv_obj_send_event(id(grid_total_label), lvgl::lv_update_event, nullptr);
-              }
     battery_total:
       name: "Total Battery"
       id: battery_total_sensor
