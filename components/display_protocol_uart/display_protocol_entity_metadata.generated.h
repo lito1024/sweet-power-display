@@ -127,6 +127,7 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {10013, "grid_raw_voltage", "Grid Raw Voltage", "V", 1, "FAST"},
   {10014, "display_enabled", "Display Enabled", "", 0, "FAST"},
   {10015, "display_maintenance_wifi_enabled", "Display Maintenance Wi-Fi Enabled", "", 0, "FAST"},
+  {10016, "home_assistant_connected", "Home Assistant Connected", "", 0, "FAST"},
   {11001, "garage_presence", "Garage Presence", "", 0, "FAST"},
   {12001, "display_maintenance_wifi_actual", "Display Maintenance Wi-Fi Actual", "", 0, "FAST"},
 };
