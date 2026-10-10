@@ -130,6 +130,7 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {10016, "home_assistant_connected", "Home Assistant Connected", "", 0, "FAST"},
   {11001, "garage_presence", "Garage Presence", "", 0, "FAST"},
   {12001, "display_maintenance_wifi_actual", "Display Maintenance Wi-Fi Actual", "", 0, "FAST"},
+  {14001, "grid_source_voltage", "Grid Source Voltage", "V", 1, "FAST"},
 };
 
 }  // namespace display_protocol_uart
