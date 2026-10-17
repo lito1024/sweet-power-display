@@ -130,6 +130,18 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {10016, "home_assistant_connected", "Home Assistant Connected", "", 0, "FAST"},
   {11001, "garage_presence", "Garage Presence", "", 0, "FAST"},
   {12001, "display_maintenance_wifi_actual", "Display Maintenance Wi-Fi Actual", "", 0, "FAST"},
+  {13001, "ks_generator_voltage", "KS Generator Voltage", "V", 1, "FAST"},
+  {13002, "ks_generator_current", "KS Generator Current", "A", 2, "FAST"},
+  {13003, "ks_generator_power", "KS Generator Power", "W", 0, "FAST"},
+  {13004, "ks_generator_energy", "KS Generator Energy", "kWh", 2, "SLOW"},
+  {13005, "ks_generator_frequency", "KS Generator Frequency", "Hz", 1, "FAST"},
+  {13006, "ks_generator_power_factor", "KS Generator Power Factor", "", 2, "FAST"},
+  {13007, "zegor_generator_voltage", "Zegor Generator Voltage", "V", 1, "FAST"},
+  {13008, "zegor_generator_current", "Zegor Generator Current", "A", 2, "FAST"},
+  {13009, "zegor_generator_power", "Zegor Generator Power", "W", 0, "FAST"},
+  {13010, "zegor_generator_energy", "Zegor Generator Energy", "kWh", 2, "SLOW"},
+  {13011, "zegor_generator_frequency", "Zegor Generator Frequency", "Hz", 1, "FAST"},
+  {13012, "zegor_generator_power_factor", "Zegor Generator Power Factor", "", 2, "FAST"},
   {14001, "grid_source_voltage", "Grid Source Voltage", "V", 1, "FAST"},
 };
 
