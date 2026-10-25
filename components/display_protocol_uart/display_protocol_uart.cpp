@@ -732,6 +732,32 @@ void DisplayProtocolUARTComponent::publish_system_telemetry_field_(uint16_t fiel
     case ESPTelemetry::FieldIdGridRawVoltage:
       this->publish_float_(this->grid_raw_voltage_sensor_, scaled_or_nan_(value, 10.0f));
       return;
+    // Display 3A (Controller FAST: generator power, stabilizer outputs;
+    // Controller ENERGY_TOTALS: oil counters).
+    case ESPTelemetry::FieldIdKsGeneratorPower:
+      this->publish_float_(this->ks_generator_power_sensor_, scaled_or_nan_(value, 1.0f));
+      return;
+    case ESPTelemetry::FieldIdZegorGeneratorPower:
+      this->publish_float_(this->zegor_generator_power_sensor_, scaled_or_nan_(value, 1.0f));
+      return;
+    case ESPTelemetry::FieldIdQuant9OutputVoltage:
+      this->publish_float_(this->quant9_output_voltage_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdElexOutputVoltage:
+      this->publish_float_(this->elex_output_voltage_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdKsOilHours:
+      this->publish_float_(this->ks_oil_hours_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdKsOilInterval:
+      this->publish_float_(this->ks_oil_interval_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdZegorOilHours:
+      this->publish_float_(this->zegor_oil_hours_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
+    case ESPTelemetry::FieldIdZegorOilInterval:
+      this->publish_float_(this->zegor_oil_interval_sensor_, scaled_or_nan_(value, 10.0f));
+      return;
     case ESPTelemetry::FieldIdDisplayEnabled:
       if (value != static_cast<int32_t>(ESPTelemetry::kInvalidI32)) {
         this->publish_binary_(this->display_enabled_sensor_, value != 0);
@@ -932,6 +958,14 @@ void DisplayProtocolUARTComponent::mark_system_stale_() {
   this->publish_float_(this->grid_input_power_factor_sensor_, NAN);
   this->publish_float_(this->grid_raw_voltage_sensor_, NAN);
   this->publish_float_(this->power_total_sensor_, NAN);
+  this->publish_float_(this->ks_generator_power_sensor_, NAN);
+  this->publish_float_(this->zegor_generator_power_sensor_, NAN);
+  this->publish_float_(this->quant9_output_voltage_sensor_, NAN);
+  this->publish_float_(this->elex_output_voltage_sensor_, NAN);
+  this->publish_float_(this->ks_oil_hours_sensor_, NAN);
+  this->publish_float_(this->ks_oil_interval_sensor_, NAN);
+  this->publish_float_(this->zegor_oil_hours_sensor_, NAN);
+  this->publish_float_(this->zegor_oil_interval_sensor_, NAN);
 }
 
 void DisplayProtocolUARTComponent::update_connection_status_(uint8_t device_index) {

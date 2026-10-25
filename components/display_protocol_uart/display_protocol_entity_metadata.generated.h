@@ -128,6 +128,8 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {10014, "display_enabled", "Display Enabled", "", 0, "FAST"},
   {10015, "display_maintenance_wifi_enabled", "Display Maintenance Wi-Fi Enabled", "", 0, "FAST"},
   {10016, "home_assistant_connected", "Home Assistant Connected", "", 0, "FAST"},
+  {10023, "quant9_output_voltage", "Quant9 Output Voltage", "V", 1, "FAST"},
+  {10024, "elex_output_voltage", "Elex Output Voltage", "V", 1, "FAST"},
   {11001, "garage_presence", "Garage Presence", "", 0, "FAST"},
   {12001, "display_maintenance_wifi_actual", "Display Maintenance Wi-Fi Actual", "", 0, "FAST"},
   {13001, "ks_generator_voltage", "KS Generator Voltage", "V", 1, "FAST"},
@@ -142,6 +144,10 @@ static constexpr DisplayProtocolEntityMetadata kDisplayProtocolEntityMetadata[] 
   {13010, "zegor_generator_energy", "Zegor Generator Energy", "kWh", 2, "SLOW"},
   {13011, "zegor_generator_frequency", "Zegor Generator Frequency", "Hz", 1, "FAST"},
   {13012, "zegor_generator_power_factor", "Zegor Generator Power Factor", "", 2, "FAST"},
+  {13013, "ks_oil_hours", "KS Oil Hours", "h", 1, "SLOW"},
+  {13014, "ks_oil_interval", "KS Oil Change Interval", "h", 1, "SLOW"},
+  {13015, "zegor_oil_hours", "Zegor Oil Hours", "h", 1, "SLOW"},
+  {13016, "zegor_oil_interval", "Zegor Oil Change Interval", "h", 1, "SLOW"},
   {14001, "grid_source_voltage", "Grid Source Voltage", "V", 1, "FAST"},
 };
 

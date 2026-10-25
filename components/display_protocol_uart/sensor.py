@@ -150,6 +150,15 @@ CONF_SOLAR_TOTAL = "solar_total"
 CONF_POWER_TOTAL = "power_total"
 CONF_GRID_TOTAL = "grid_total"
 CONF_BATTERY_TOTAL = "battery_total"
+# Display 3A: forwarded by the Controller in its device-3 frames.
+CONF_KS_GENERATOR_POWER = "ks_generator_power"
+CONF_ZEGOR_GENERATOR_POWER = "zegor_generator_power"
+CONF_QUANT9_OUTPUT_VOLTAGE = "quant9_output_voltage"
+CONF_ELEX_OUTPUT_VOLTAGE = "elex_output_voltage"
+CONF_KS_OIL_HOURS = "ks_oil_hours"
+CONF_KS_OIL_INTERVAL = "ks_oil_interval"
+CONF_ZEGOR_OIL_HOURS = "zegor_oil_hours"
+CONF_ZEGOR_OIL_INTERVAL = "zegor_oil_interval"
 CONF_SYSTEM_OUTPUT_VOLTAGE = "system_output_voltage"
 CONF_SYSTEM_OUTPUT_CURRENT = "system_output_current"
 CONF_SYSTEM_OUTPUT_POWER = "system_output_power"
@@ -318,6 +327,14 @@ SENSOR_MAP = {
     CONF_GRID_INPUT_FREQUENCY: ("set_grid_input_frequency_sensor", UNIT_HERTZ, DEVICE_CLASS_FREQUENCY, STATE_CLASS_MEASUREMENT, 1),
     CONF_GRID_INPUT_POWER_FACTOR: ("set_grid_input_power_factor_sensor", None, DEVICE_CLASS_POWER_FACTOR, STATE_CLASS_MEASUREMENT, 2),
     CONF_GRID_RAW_VOLTAGE: ("set_grid_raw_voltage_sensor", UNIT_VOLT, DEVICE_CLASS_VOLTAGE, STATE_CLASS_MEASUREMENT, 1),
+    CONF_KS_GENERATOR_POWER: ("set_ks_generator_power_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_ZEGOR_GENERATOR_POWER: ("set_zegor_generator_power_sensor", UNIT_WATT, DEVICE_CLASS_POWER, STATE_CLASS_MEASUREMENT, 0),
+    CONF_QUANT9_OUTPUT_VOLTAGE: ("set_quant9_output_voltage_sensor", UNIT_VOLT, DEVICE_CLASS_VOLTAGE, STATE_CLASS_MEASUREMENT, 1),
+    CONF_ELEX_OUTPUT_VOLTAGE: ("set_elex_output_voltage_sensor", UNIT_VOLT, DEVICE_CLASS_VOLTAGE, STATE_CLASS_MEASUREMENT, 1),
+    CONF_KS_OIL_HOURS: ("set_ks_oil_hours_sensor", "h", None, STATE_CLASS_MEASUREMENT, 1),
+    CONF_KS_OIL_INTERVAL: ("set_ks_oil_interval_sensor", "h", None, STATE_CLASS_MEASUREMENT, 1),
+    CONF_ZEGOR_OIL_HOURS: ("set_zegor_oil_hours_sensor", "h", None, STATE_CLASS_MEASUREMENT, 1),
+    CONF_ZEGOR_OIL_INTERVAL: ("set_zegor_oil_interval_sensor", "h", None, STATE_CLASS_MEASUREMENT, 1),
 }
 
 
@@ -368,6 +385,14 @@ GLOBAL_ONLY_KEYS = {
     CONF_GRID_INPUT_FREQUENCY,
     CONF_GRID_INPUT_POWER_FACTOR,
     CONF_GRID_RAW_VOLTAGE,
+    CONF_KS_GENERATOR_POWER,
+    CONF_ZEGOR_GENERATOR_POWER,
+    CONF_QUANT9_OUTPUT_VOLTAGE,
+    CONF_ELEX_OUTPUT_VOLTAGE,
+    CONF_KS_OIL_HOURS,
+    CONF_KS_OIL_INTERVAL,
+    CONF_ZEGOR_OIL_HOURS,
+    CONF_ZEGOR_OIL_INTERVAL,
 }
 
 PER_DEVICE_SENSOR_MAP = {k: v for k, v in SENSOR_MAP.items() if k not in GLOBAL_ONLY_KEYS}

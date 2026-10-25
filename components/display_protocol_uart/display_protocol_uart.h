@@ -199,6 +199,16 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   void set_grid_input_energy_sensor(sensor::Sensor *sensor) { this->grid_input_energy_sensor_ = sensor; }
   void set_grid_input_frequency_sensor(sensor::Sensor *sensor) { this->grid_input_frequency_sensor_ = sensor; }
   void set_grid_input_power_factor_sensor(sensor::Sensor *sensor) { this->grid_input_power_factor_sensor_ = sensor; }
+  // Display 3A: generator power, stabilizer outputs and oil counters,
+  // forwarded by the Controller (device 3). NAN = invalid / stale.
+  void set_ks_generator_power_sensor(sensor::Sensor *sensor) { this->ks_generator_power_sensor_ = sensor; }
+  void set_zegor_generator_power_sensor(sensor::Sensor *sensor) { this->zegor_generator_power_sensor_ = sensor; }
+  void set_quant9_output_voltage_sensor(sensor::Sensor *sensor) { this->quant9_output_voltage_sensor_ = sensor; }
+  void set_elex_output_voltage_sensor(sensor::Sensor *sensor) { this->elex_output_voltage_sensor_ = sensor; }
+  void set_ks_oil_hours_sensor(sensor::Sensor *sensor) { this->ks_oil_hours_sensor_ = sensor; }
+  void set_ks_oil_interval_sensor(sensor::Sensor *sensor) { this->ks_oil_interval_sensor_ = sensor; }
+  void set_zegor_oil_hours_sensor(sensor::Sensor *sensor) { this->zegor_oil_hours_sensor_ = sensor; }
+  void set_zegor_oil_interval_sensor(sensor::Sensor *sensor) { this->zegor_oil_interval_sensor_ = sensor; }
   void set_grid_raw_voltage_sensor(sensor::Sensor *sensor) { this->grid_raw_voltage_sensor_ = sensor; }
   void set_display_enabled_sensor(binary_sensor::BinarySensor *sensor) { this->display_enabled_sensor_ = sensor; }
   void set_display_maintenance_wifi_requested_sensor(binary_sensor::BinarySensor *sensor) { this->display_maintenance_wifi_requested_sensor_ = sensor; }
@@ -473,6 +483,14 @@ class DisplayProtocolUARTComponent : public Component, public uart::UARTDevice {
   sensor::Sensor *grid_input_energy_sensor_ = nullptr;
   sensor::Sensor *grid_input_frequency_sensor_ = nullptr;
   sensor::Sensor *grid_input_power_factor_sensor_ = nullptr;
+  sensor::Sensor *ks_generator_power_sensor_ = nullptr;
+  sensor::Sensor *zegor_generator_power_sensor_ = nullptr;
+  sensor::Sensor *quant9_output_voltage_sensor_ = nullptr;
+  sensor::Sensor *elex_output_voltage_sensor_ = nullptr;
+  sensor::Sensor *ks_oil_hours_sensor_ = nullptr;
+  sensor::Sensor *ks_oil_interval_sensor_ = nullptr;
+  sensor::Sensor *zegor_oil_hours_sensor_ = nullptr;
+  sensor::Sensor *zegor_oil_interval_sensor_ = nullptr;
   sensor::Sensor *grid_raw_voltage_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_enabled_sensor_ = nullptr;
   binary_sensor::BinarySensor *display_maintenance_wifi_requested_sensor_ = nullptr;

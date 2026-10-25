@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 YAML_PATH = REPO_ROOT / "sweet-power-display-offline-uart.yaml"
 HEADER_PATH = REPO_ROOT / "components" / "display_protocol_uart" / "display_protocol_uart.h"
 CPP_PATH = REPO_ROOT / "components" / "display_protocol_uart" / "display_protocol_uart.cpp"
+HMI_PATH = REPO_ROOT / "display_hmi.h"
 
 
 class DeviceState:
@@ -398,10 +399,10 @@ def test_soc_renders_percent_or_dashes_when_unavailable() -> None:
 
 
 def test_export_limit_renders_percent_or_dashes_when_unavailable() -> None:
-    # Stage 56: kW format (owner mockup "50% (6kW)").
-    assert render_export_limit(70.0) == "70% (8.4kW)"
-    assert render_export_limit(100.0) == "100% (12kW)"
-    assert render_export_limit(NAN) == "--"
+    # Display 3A: kW format in the GRID tile corner ("LIMIT 50% | 6kW").
+    assert render_export_limit(70.0) == "LIMIT 70% | 8.4kW"
+    assert render_export_limit(100.0) == "LIMIT 100% | 12kW"
+    assert render_export_limit(NAN) == "LIMIT --"
 
 
 def test_export_tracks_zero_export_enabled_directly() -> None:
@@ -425,24 +426,6 @@ def test_export_blanks_before_first_value_ever_received() -> None:
     assert render_export(True, None) == ("--", "white")
 
 
-def test_total_labels_and_system_grid_labels_exist_in_yaml() -> None:
-    # Stage 56: the inverter-derived Grid row/TOTAL is gone; "Grid" is now
-    # the Eastron meter (grid_power_label) in the right parameter column.
-    text = YAML_PATH.read_text(encoding="utf-8")
-    total_label_ids = set(re.findall(r"id:\s*(\w*_total_label)\b", text))
-    assert total_label_ids == {
-        "solar_total_label",
-        "power_total_label",
-        "battery_total_label",
-    }
-    assert "id: grid_power_label" in text
-    for removed in ("grid_total_label", "grid_1_label", "grid_2_label"):
-        assert removed not in text
-    assert "id: grid_raw_voltage_label" in text
-    assert "power_1_label" not in text
-    assert "power_2_label" not in text
-
-
 def test_component_declares_total_sensor_only_for_solar_power_grid_battery() -> None:
     # Distinguish Stage 37's single-instance TOTAL setters (no device_index
     # -- both inverters already combined) from the many pre-existing
@@ -456,22 +439,6 @@ def test_component_declares_total_sensor_only_for_solar_power_grid_battery() -> 
         "set_grid_total_sensor",
         "set_battery_total_sensor",
     }
-
-
-def test_power_uses_pzem_and_grid_uses_eastron_in_yaml() -> None:
-    # Owner (2026-10-02): Grid from Eastron (Controller grid_input_power,
-    # FieldId 10009), Power from PZEM (Controller system_output_power).
-    text = YAML_PATH.read_text(encoding="utf-8")
-    power = text[text.index("    system_output_power:\n") : text.index("    grid_raw_voltage:\n")]
-    assert "id(power_total_label)" in power
-    grid = text[text.index("    grid_input_power:\n") : text.index("    grid_raw_voltage:\n")]
-    assert "id(grid_power_label)" in grid
-    assert "id(grid_power_label)" not in power.split("    grid_input_power:\n")[0]
-    assert "grid_raw_voltage:" in text
-    assert "id(grid_raw_voltage_label)" in text
-    # The inverter-derived Grid TOTAL is still decoded but drives no label.
-    grid_total = text[text.index("    grid_total:\n") : text.index("    battery_total:\n")]
-    assert "lv_label" not in grid_total
 
 
 def render_grid_power(x: float) -> tuple[str, str]:
@@ -507,72 +474,30 @@ def test_grid_current_rendering_thresholds() -> None:
     assert render_grid_current(24.9) == ("24.9 A", "yellow")
     assert render_grid_current(25.0) == ("25.0 A", "red")
     assert render_grid_current(NAN) == ("--", "white")
-    text = YAML_PATH.read_text(encoding="utf-8")
-    block = text[text.index("    grid_input_current:\n") : text.index("    grid_raw_voltage:\n")]
-    assert "x < 20.0f" in block and "x < 25.0f" in block and "id(grid_current_label)" in block
-
-
-def test_pzem_voltage_rendered_green_in_power_row() -> None:
-    text = YAML_PATH.read_text(encoding="utf-8")
-    block = text[text.index("    system_output_voltage:\n") : text.index("    grid_input_current:\n")]
-    assert "id(system_voltage_label)" in block
-    assert '"%.1f V"' in block
-    assert "lv_obj_set_style_text_color" not in block  # fixed green from the widget
+    hmi = HMI_PATH.read_text(encoding="utf-8")
+    block = hmi[hmi.index("inline uint32_t grid_current_color") : hmi.index("// Export limit:")]
+    assert "a < 20.0f" in block and "a < 25.0f" in block
 
 
 def render_export_limit(x: float) -> str:
     # Python mirror of the Stage 56 Export Limit lambda.
     if x is None or math.isnan(x):
-        return "--"
+        return "LIMIT --"
     kw = x * 120.0 / 1000.0
     if abs(kw - round(kw)) < 0.05:
-        return f"{x:.0f}% ({kw:.0f}kW)"
-    return f"{x:.0f}% ({kw:.1f}kW)"
+        return f"LIMIT {x:.0f}% | {kw:.0f}kW"
+    return f"LIMIT {x:.0f}% | {kw:.1f}kW"
 
 
 def test_export_limit_is_rendered_in_kw() -> None:
-    assert render_export_limit(50.0) == "50% (6kW)"
-    assert render_export_limit(100.0) == "100% (12kW)"
-    assert render_export_limit(45.0) == "45% (5.4kW)"
-    assert render_export_limit(0.0) == "0% (0kW)"
-    assert render_export_limit(NAN) == "--"
-    text = YAML_PATH.read_text(encoding="utf-8")
-    assert '"%.0f%% (%.0fkW)"' in text and '"%.0f%% (%.1fkW)"' in text
-    assert "(%.0f W)" not in text
-
-
-def test_stage56_layout_top_section_and_reserved_area() -> None:
-    text = YAML_PATH.read_text(encoding="utf-8")
-    top = text.index("id: top_section")
-    sep = text.index("id: reserved_area")
-    section = text[top:sep]
-    table = section[section.index("id: inverter_table") : section.index("# ---- Right: parameter column")]
-    right = section[section.index("# ---- Right: parameter column") :]
-    # Left table rows (Stage 56b: Power under SOC), no per-inverter Grid row.
-    rows = [table.index(f'text: "{n}"') for n in ("TOTAL", "Solar", "PV1", "PV2", "Battery", "SOC", "Power")]
-    assert rows == sorted(rows)
-    assert 'text: "Grid"' not in table
-    # Power row: TOTAL = power_total_label, LXP1 = caption "Voltage",
-    # LXP2 = PZEM voltage (green).
-    power_row = table[table.index('text: "Power"') :]
-    order = [power_row.index(x) for x in ("id: power_total_label", 'text: "Voltage"', "id: system_voltage_label")]
-    assert order == sorted(order)
-    assert "id: system_voltage_label, text: \"--\", text_font: montserrat_26, text_color: 0x00E676" in power_row
-    # Right column order (Stage 56b): Export, Limit, Grid, Voltage, Current.
-    names = [right.index(f'text: "{n}"') for n in ("Export", "Limit", "Grid", "Voltage", "Current")]
-    assert names == sorted(names)
-    for label in ("export_1_label", "export_limit_1_label", "grid_power_label",
-                  "grid_raw_voltage_label", "grid_current_label"):
-        assert f"id: {label}" in right, label
-    assert 'text: "Power"' not in right and 'text: "Grid V"' not in text
-    # No LVGL row gap in the top section (the 56a SOC-clipping cause).
-    assert section.count("pad_row: 0") >= 3
-    row_heights = [int(h) for h in __import__("re").findall(r"height: (\d+)\n                          border_width: 0", table)]
-    assert sum(row_heights) <= 226, row_heights
-    # The reserved lower area is an empty placeholder (no child widgets).
-    reserved = text[sep : text.index("\n# Stage 37: raw pass-through sensors")]
-    assert "widgets:" not in reserved
-    assert "flex_grow: 1" in reserved
+    assert render_export_limit(50.0) == "LIMIT 50% | 6kW"
+    assert render_export_limit(100.0) == "LIMIT 100% | 12kW"
+    assert render_export_limit(45.0) == "LIMIT 45% | 5.4kW"
+    assert render_export_limit(0.0) == "LIMIT 0% | 0kW"
+    assert render_export_limit(NAN) == "LIMIT --"
+    hmi = HMI_PATH.read_text(encoding="utf-8")
+    assert '"LIMIT %.0f%% | %.0fkW"' in hmi and '"LIMIT %.0f%% | %.1fkW"' in hmi
+    assert "EXPORT_LIMIT_W_PER_PERCENT = 120.0f" in hmi
 
 
 def test_header_icons_are_packed_tightly() -> None:
@@ -588,36 +513,6 @@ def test_offline_header_switches_to_small_font_only_when_offline() -> None:
     for n in ("1", "2"):
         assert (f"lv_obj_set_style_text_font(id(header{n}_label),\n"
                 f"                    code == 3 ? &lv_font_montserrat_14 : &lv_font_montserrat_20, 0);") in text
-
-
-def test_lower_parameter_columns_use_controller_and_inverter1_only() -> None:
-    text = YAML_PATH.read_text(encoding="utf-8")
-    assert 'text: "Limit"' in text  # Stage 56b: renamed from "Export Limit"
-    assert 'text: "Export Limit"' not in text
-    assert "x * 120.0f" in text
-    assert "export_limit_1_label" in text
-    assert "export_1_label" in text
-    assert "export_limit_2_label" not in text
-    assert "export_2_label" not in text
-    assert "system_power_blink_active" in text
-    assert "inverter1_gateway_link_connected:" in text
-    assert "id: inverter1_link_connected" in text
-    assert "id(inverter1_link_connected).state" in text
-
-
-def test_export_limit_watts_are_not_written_to_soc_label() -> None:
-    text = YAML_PATH.read_text(encoding="utf-8")
-    soc_start = text.index("inverter1_battery_soc:")
-    export_limit_start = text.index("inverter1_max_backflow_power:")
-    solar_start = text.index("inverter1_solar:")
-
-    soc_block = text[soc_start:export_limit_start]
-    export_limit_block = text[export_limit_start:solar_start]
-
-    assert "x * 120.0f" not in soc_block
-    assert "id(soc_1_label)" in soc_block
-    assert "x * 120.0f" in export_limit_block
-    assert "id(export_limit_1_label)" in export_limit_block
 
 
 def test_grid_voltage_color_thresholds() -> None:
@@ -824,7 +719,7 @@ def test_mockup_scenario_end_to_end() -> None:
     assert render_signed(battery_1) == ("+600 W", "green")
 
     assert render_percent(lpx1.soc) == "100%"
-    assert render_export_limit(lpx1.max_backflow) == "70% (8.4kW)"  # Stage 56: kW
+    assert render_export_limit(lpx1.max_backflow) == "LIMIT 70% | 8.4kW"  # Display 3A
 
     # Export tracks zero_export_enabled directly (see the Stage 37 field
     # correction note on render_export) -- lpx1's False -> Off, lpx2's
@@ -839,6 +734,122 @@ def _fresh(**kwargs) -> DeviceState:
     for key, value in kwargs.items():
         setattr(dev, key, value)
     return dev
+
+
+# ---------------------------------------------------------------------------
+# Display 3A (owner-approved 2026-10-25) layout and wiring
+# ---------------------------------------------------------------------------
+
+
+def _yaml() -> str:
+    return YAML_PATH.read_text(encoding="utf-8")
+
+
+def test_3a_layout_order_and_height_budget() -> None:
+    text = _yaml()
+    order = [text.index(x) for x in ('text: "SWEET POWER"', "id: kpi_row", "id: inverter_table",
+                                      "id: layout_spacer", "id: source_strip")]
+    assert order == sorted(order)
+    kpi = text[text.index("id: kpi_row"): text.index("id: inverter_table")]
+    tiles = [kpi.index(f"id: {t}_tile") for t in ("solar", "battery", "load", "grid")]
+    assert tiles == sorted(tiles)
+    strip = text[text.index("id: source_strip"):]
+    tiles = [strip.index(f"id: {t}_tile") for t in ("stabilizer", "zegor", "ks")]
+    assert tiles == sorted(tiles)
+    table = text[text.index("id: inverter_table"): text.index("id: layout_spacer")]
+    cols = [table.index(f'text: "{c}"') for c in ("Solar", "PV1", "PV2", "Battery", "SOC")]
+    assert cols == sorted(cols)
+    for n in ("1", "2"):
+        row = table[table.index(f"id: inverter{n}_row"):]
+        cells = [row.index(f"id: {c}") for c in (f"header{n}_label", f"solar_{n}_label", f"pv1_{n}_label",
+                                                  f"pv2_{n}_label", f"battery_{n}_label", f"soc_{n}_label")]
+        assert cells == sorted(cells), n
+    # 480 px panel, 4 px root padding: fixed parts must leave room for the spacer.
+    heights = {"title": 34, "kpi_row": 118, "inverter_table": 106, "source_strip": 132}
+    for key in ("kpi_row", "inverter_table", "source_strip"):
+        block = text[text.index(f"id: {key}"): text.index(f"id: {key}") + 120]
+        assert f"height: {heights[key]}" in block, key
+    assert sum(heights.values()) <= 480 - 8
+    # Stage 56 widgets are gone (no duplicate presentation of the same values).
+    for removed in ("top_section", "reserved_area", "power_total_label", "grid_power_label",
+                    "export_limit_1_label", "export_1_label", "system_voltage_label"):
+        assert f"id: {removed}" not in text and f"id({removed})" not in text, removed
+
+
+def test_3a_export_limit_lives_in_the_grid_tile() -> None:
+    text = _yaml()
+    grid = text[text.index("id: grid_tile"): text.index("id: inverter_table")]
+    assert "id: export_limit_label" in grid and "align: RIGHT_MID" in grid
+    assert "id: export_use_bar" in grid
+    assert "inverter1_max_backflow_power:\n      name: \"Inverter 1 Max Backflow Power\"\n      id: inverter1_max_backflow_power\n" in text
+    refresh = text[text.index("display_hmi::refresh_grid("):]
+    refresh = refresh[: refresh.index(");") + 2]
+    for arg in ("id(export_limit_label)", "id(export_use_bar)", "st(id(grid_input_power_sensor))",
+                "st(id(grid_raw_voltage_sensor))", "st(id(grid_input_current_sensor))",
+                "st(id(inverter1_max_backflow_power))", "export_state"):
+        assert arg in refresh, arg
+    hmi = HMI_PATH.read_text(encoding="utf-8")
+    assert "100.0f * export_w / (limit_percent * EXPORT_LIMIT_W_PER_PERCENT)" in hmi
+
+
+def test_3a_sources_are_controller_pzem_eastron_and_lxp1_export() -> None:
+    text = _yaml()
+    lam = text[text.index("display_hmi::refresh_solar("): text.index("  - interval: 1s\n    then:\n      - if:")]
+    assert "st(id(system_output_power_sensor))" in lam and "st(id(system_output_voltage_sensor))" in lam
+    assert "st(id(solar_total_sensor))" in lam and "st(id(battery_total_sensor))" in lam
+    # Export On/Off only while LXP1's link is up (Stage 37 rule, unchanged).
+    assert "id(inverter1_link_connected).state" in lam and "id(inverter1_zero_export_enabled).state ? 1 : 0" in lam
+    assert "inverter2_zero_export_enabled).state" not in lam
+    # Load blink (> 5 kW) still drives the 500 ms blink interval, now on the LOAD tile.
+    assert "id(system_power_blink_active) = blink;" in lam
+    assert "id(load_value_label),\n            lv_color_hex(id(system_power_blink_visible) ? 0xFF3B30 : 0x202020)" in text
+
+
+def test_3a_owner_thresholds_kept_in_display_hmi() -> None:
+    hmi = HMI_PATH.read_text(encoding="utf-8")
+    load = hmi[hmi.index("inline uint32_t load_color"): hmi.index("// Eastron grid power")]
+    assert "w < 3000.0f" in load and "w <= 4500.0f" in load and "w > 5000.0f" in load
+    volt = hmi[hmi.index("inline uint32_t grid_voltage_color"): hmi.index("// Grid current")]
+    assert "v >= 190.0f && v <= 230.0f" in volt and "v >= 160.0f && v < 190.0f" in volt and "v <= 250.0f" in volt
+    gp = hmi[hmi.index("inline uint32_t grid_power_color"): hmi.index("// Grid voltage")]
+    assert "w > 0.0f ? YELLOW : GREEN" in gp
+
+
+def test_3a_generators_stabilizer_and_oil() -> None:
+    text = _yaml()
+    for g in ("zegor", "ks"):
+        call = text[text.index(f"display_hmi::refresh_generator(id({g}_tile)"):]
+        call = call[: call.index(");") + 2]
+        for arg in (f"id({g}_status_label)", f"id({g}_value_label)", f"id({g}_oil_label)", f"id({g}_oil_bar)",
+                    f"st(id({g}_generator_power_sensor))", f"st(id({g}_oil_hours_sensor))",
+                    f"st(id({g}_oil_interval_sensor))", f"id({g}_run_start_ms)"):
+            assert arg in call, (g, arg)
+        assert f"{g}_generator_power: {{id: {g}_generator_power_sensor, internal: true}}" in text
+    stab = text[text.index("display_hmi::refresh_stabilizer("):]
+    assert "st(id(quant9_output_voltage_sensor)), st(id(elex_output_voltage_sensor))" in stab[:300]
+    hmi = HMI_PATH.read_text(encoding="utf-8")
+    assert "STABILIZER_PRESENT_V = 150.0f" in hmi and "NOT the Stage 48L validity threshold" in hmi
+    oil = hmi[hmi.index("inline uint32_t oil_color"): hmi.index("// ---- tiles ----")]
+    assert "used >= 0.95f) return RED" in oil and "used >= 0.80f) return AMBER" in oil
+    assert "OIL CHANGE" in hmi
+
+
+def test_3a_new_controller_fields_decoded_and_blanked() -> None:
+    cpp = CPP_PATH.read_text(encoding="utf-8")
+    pub = cpp[cpp.index("void DisplayProtocolUARTComponent::publish_system_telemetry_field_"):]
+    pub = pub[: pub.index("default:")]
+    stale = cpp[cpp.index("void DisplayProtocolUARTComponent::mark_system_stale_"):]
+    stale = stale[: stale.index("\n}\n")]
+    for name, sensor, scale in (("KsGeneratorPower", "ks_generator_power", "1.0f"),
+                                ("ZegorGeneratorPower", "zegor_generator_power", "1.0f"),
+                                ("Quant9OutputVoltage", "quant9_output_voltage", "10.0f"),
+                                ("ElexOutputVoltage", "elex_output_voltage", "10.0f"),
+                                ("KsOilHours", "ks_oil_hours", "10.0f"), ("KsOilInterval", "ks_oil_interval", "10.0f"),
+                                ("ZegorOilHours", "zegor_oil_hours", "10.0f"),
+                                ("ZegorOilInterval", "zegor_oil_interval", "10.0f")):
+        assert (f"case ESPTelemetry::FieldId{name}:\n      this->publish_float_(this->{sensor}_sensor_, "
+                f"scaled_or_nan_(value, {scale}));") in pub, name
+        assert f"this->publish_float_(this->{sensor}_sensor_, NAN);" in stale, name
 
 
 def main() -> int:
@@ -869,18 +880,18 @@ def main() -> int:
         test_export_keeps_last_value_when_source_not_fresh_but_link_connected,
         test_export_blanks_when_link_off_even_if_last_known_value_exists,
         test_export_blanks_before_first_value_ever_received,
-        test_total_labels_and_system_grid_labels_exist_in_yaml,
         test_component_declares_total_sensor_only_for_solar_power_grid_battery,
-        test_power_uses_pzem_and_grid_uses_eastron_in_yaml,
         test_grid_power_rendering_follows_eastron_sign,
         test_export_limit_is_rendered_in_kw,
+        test_3a_layout_order_and_height_budget,
+        test_3a_export_limit_lives_in_the_grid_tile,
+        test_3a_sources_are_controller_pzem_eastron_and_lxp1_export,
+        test_3a_owner_thresholds_kept_in_display_hmi,
+        test_3a_generators_stabilizer_and_oil,
+        test_3a_new_controller_fields_decoded_and_blanked,
         test_grid_current_rendering_thresholds,
-        test_pzem_voltage_rendered_green_in_power_row,
-        test_stage56_layout_top_section_and_reserved_area,
         test_header_icons_are_packed_tightly,
         test_offline_header_switches_to_small_font_only_when_offline,
-        test_lower_parameter_columns_use_controller_and_inverter1_only,
-        test_export_limit_watts_are_not_written_to_soc_label,
         test_grid_voltage_color_thresholds,
         test_display_maintenance_networking_is_boot_disabled_and_minimal,
         test_display_enabled_controls_only_existing_ch422g_enable_lines,
