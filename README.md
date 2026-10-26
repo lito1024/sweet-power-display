@@ -110,3 +110,23 @@ The offline display keeps last valid inverter values during short telemetry
 gaps and blanks them only when an inverter path reaches `Off`. See
 `docs/DisplayRuntimeSemantics.md` for the `On`/`Wait`/`Off` timing and value
 retention rules.
+
+## Screen Layout (Stage 58 / variant 3A, 2026-10-25)
+
+800 x 480, `sweet-power-display-offline-uart.yaml` + `display_hmi.h`:
+
+- Title row with the SPC / HA / Wi-Fi status icons (unchanged).
+- KPI tiles: **Solar** (kW, PV1/PV2), **Battery** (average SOC + bar, net
+  kW in/out), **Load** (PZEM #1; < 3 kW white, 3-4.5 kW yellow, > 4.5 kW
+  red, > 5 kW blinking), **Grid** (Eastron; import yellow / export green,
+  V and A colour thresholds, Export ON/OFF of LXP1, export limit
+  "LIMIT 50% | 6kW" in the corner and a bar for the share of the limit in
+  use).
+- LXP1 / LXP2 table: On / Stale / Offline status, Solar, PV1, PV2,
+  Battery, SOC.
+- Source strip: **Stabilizer** (QUANT9 / ELEX from the Controller's V3 /
+  V1, HMI-only >= 150 V rule), **Zegor** and **KS** (RUNNING h:mm or OFF,
+  kW, oil hours / interval with a green-amber-red bar, "OIL CHANGE" when
+  due).
+- Tiles refresh once per second from the decoded sensors; every value is
+  "--" when its source is invalid or the Controller link is stale.
