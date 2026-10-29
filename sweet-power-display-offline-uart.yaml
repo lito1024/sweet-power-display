@@ -94,6 +94,10 @@ wifi:
 api:
   encryption:
     key: !secret api_encryption_key
+  # Production has no API client: Wi-Fi is off on boot and HA connects only
+  # during a maintenance window. The default 15 min api reboot_timeout
+  # rebooted the Display every 15 min ("No clients; rebooting", ESP-013).
+  reboot_timeout: 0s
 
 ota:
   - platform: esphome
