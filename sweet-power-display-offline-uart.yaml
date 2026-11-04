@@ -62,8 +62,15 @@ logger:
   hardware_uart: USB_SERIAL_JTAG
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # ESP-033: Garage-IoT (GarageAP only, never the house repeater) first; the
+  # old shared SSID stays as a fallback if Garage-IoT cannot be joined.
+  networks:
+    - ssid: !secret garage_iot_ssid
+      password: !secret garage_iot_password
+      priority: 10
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+      priority: 0
   enable_on_boot: false
   reboot_timeout: 0s
   on_connect:
